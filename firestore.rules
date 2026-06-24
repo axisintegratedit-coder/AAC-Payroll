@@ -53,8 +53,15 @@ service cloud.firestore {
       // Admin can read and write everything under the organization
       allow read, write: if isAdmin();
 
-      // Client can only read (no writes)
+      // Client portal users can read (no writes)
       allow read: if isClient();
+
+      // Employee Portal: employees sign in with a portal username/password that
+      // is checked client-side, so they are NOT Firebase-authenticated. The
+      // portal must therefore be able to READ organization data (employees,
+      // payslips, leaves, etc.) to log a user in and show their records.
+      // Reads are allowed for the default organization; writes remain admin-only.
+      allow read: if isDefaultOrganization();
       allow write: if false;
     }
   }
