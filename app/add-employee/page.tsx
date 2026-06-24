@@ -2817,68 +2817,19 @@ function applyBatchAllowanceAmount(nextAmount: string) {
       return;
     }
 
-    if (isAddingNewDepartment && !finalDepartment) {
-      showFormWarning("Please enter a department name.");
-      return;
-    }
-
-    if (!finalDepartment) {
-      showFormWarning("Department is required.");
-      return;
-    }
-
-    if (!jobTitle.trim()) {
-      showFormWarning("Job Title is required.");
-      return;
-    }
-
-    if (!employeeType.trim() || !["Rank and File", "Supervisory"].includes(employeeType.trim())) {
+    // Validate the chosen Employee Type / Employment Status only when one is provided.
+    if (employeeType.trim() && !["Rank and File", "Supervisory"].includes(employeeType.trim())) {
       showFormWarning("Employee Type must be Rank and File or Supervisory.");
       return;
     }
 
-    if (!employmentStatus.trim() || !["Regular", "Probationary", "Terminated"].includes(employmentStatus.trim())) {
+    if (employmentStatus.trim() && !["Regular", "Probationary", "Terminated"].includes(employmentStatus.trim())) {
       showFormWarning("Employment Status must be Regular, Probationary, or Terminated.");
-      return;
-    }
-
-    if (!isMinimumWageEarner.trim() || !["Yes", "No"].includes(isMinimumWageEarner.trim())) {
-      showFormWarning("Minimum Wage Earner field is required (Yes or No).");
-      return;
-    }
-
-    if (!payrollExempt.trim() || !["Yes", "No"].includes(payrollExempt.trim())) {
-      showFormWarning("Exempt field is required (Yes or No).");
-      return;
-    }
-
-    if (!designatedWorkplace.trim()) {
-      showFormWarning("Location is required.");
-      return;
-    }
-
-    if (!userType.trim()) {
-      showFormWarning("User Type is required.");
-      return;
-    }
-
-    if (!hireDate.trim()) {
-      showFormWarning("Hire Date is required.");
       return;
     }
 
     if (!basicPay.trim()) {
       showFormWarning("Basic Pay is required.");
-      return;
-    }
-
-    if (!standardHoursPerDay.trim() || getPositiveNumber(standardHoursPerDay, 0) <= 0) {
-      showFormWarning("Standard Hours Per Day is required.");
-      return;
-    }
-
-    if (!workingDaysPerMonth.trim() || getPositiveNumber(workingDaysPerMonth, 0) <= 0) {
-      showFormWarning("Working Days Per Month is required.");
       return;
     }
 
@@ -2899,41 +2850,6 @@ function applyBatchAllowanceAmount(nextAmount: string) {
 
     if (tin.trim() && digitsOnly(tin).length !== 12) {
       showFormWarning("TIN must be exactly 12 digits including the branch code.");
-      return;
-    }
-
-    if (!bankName.trim()) {
-      showFormWarning("Bank Name is required.");
-      return;
-    }
-
-    if (!bankAccountNumber.trim()) {
-      showFormWarning("Bank Account Number is required.");
-      return;
-    }
-
-    if (!bankAccountType.trim()) {
-      showFormWarning("Bank Account Type is required.");
-      return;
-    }
-
-    if (!birthdate.trim()) {
-      showFormWarning("Birthdate is required.");
-      return;
-    }
-
-    if (!contactNumber.trim()) {
-      showFormWarning("Contact Number is required.");
-      return;
-    }
-
-    if (!emailAddress.trim()) {
-      showFormWarning("Email Address is required.");
-      return;
-    }
-
-    if (!address.trim()) {
-      showFormWarning("Address is required.");
       return;
     }
 
@@ -5106,6 +5022,7 @@ function applyBatchAllowanceAmount(nextAmount: string) {
             </div>
 
             <button
+              type="button"
               onClick={handleSaveEmployee}
               className={primaryButtonClassName}
             >
