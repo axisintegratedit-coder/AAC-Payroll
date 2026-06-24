@@ -3169,11 +3169,6 @@ function AddPayrollPageInner() {
       return;
     }
 
-    if (!payrollComputationImport) {
-      window.alert("Please import the required Payroll Computation workbook before saving.");
-      return;
-    }
-
     if (payrollComputationErrors.length > 0) {
       window.alert("Please fix the Payroll Computation import errors before saving.");
       return;
@@ -4079,10 +4074,10 @@ function AddPayrollPageInner() {
               <div className="flex flex-wrap items-start justify-between gap-3">
                 <div>
                   <div className="text-sm font-bold text-slate-950">Per-cutoff Imports</div>
-                  <div className="mt-1 text-xs font-semibold text-slate-500">Import special items first, then the required payroll computation workbook.</div>
+                  <div className="mt-1 text-xs font-semibold text-slate-500">Optionally import special items and a payroll computation workbook, or save using the loaded employees.</div>
                 </div>
-                <StatusBadge tone={payrollComputationImport ? "emerald" : "amber"}>
-                  {payrollComputationImport ? "Ready for review" : "Computation workbook required"}
+                <StatusBadge tone={payrollComputationImport ? "emerald" : "slate"}>
+                  {payrollComputationImport ? "Ready for review" : "Computation workbook optional"}
                 </StatusBadge>
               </div>
               {!hasLoadedEmployees ? (
@@ -4407,9 +4402,9 @@ function AddPayrollPageInner() {
             <button
               type="button"
               onClick={savePayrollRun}
-              disabled={validPayrollRowCount === 0 || isSavingPayroll || !specialItemsDecisionMade || !payrollComputationImport}
+              disabled={validPayrollRowCount === 0 || isSavingPayroll || !specialItemsDecisionMade}
               className={cyanPrimaryButtonClassName}
-              style={{ background: validPayrollRowCount > 0 && !isSavingPayroll && specialItemsDecisionMade && payrollComputationImport ? "linear-gradient(135deg, #22D3EE, #06B6D4)" : "#CBD5E1" }}
+              style={{ background: validPayrollRowCount > 0 && !isSavingPayroll && specialItemsDecisionMade ? "linear-gradient(135deg, #22D3EE, #06B6D4)" : "#CBD5E1" }}
             >
               <Save className="h-4 w-4" aria-hidden="true" />
               {isSavingPayroll ? "Saving…" : "Save Payroll Run"}
