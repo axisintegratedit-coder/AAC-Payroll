@@ -600,6 +600,18 @@ const EMPLOYEE_IMPORT_HEADERS = [
   "workingDaysPerMonth",
   "standardHoursPerDay",
   "exempt",
+  "sss",
+  "philhealth",
+  "pagibig",
+  "tin",
+  "bankName",
+  "bankAccountType",
+  "bankAccountNumber",
+  "birthdate",
+  "contactNumber",
+  "emailAddress",
+  "address",
+  "immediateSupervisor",
 ] as const;
 
 const BATCH_ALLOWANCE_FIELDS = [
@@ -1345,11 +1357,18 @@ function AddEmployeePageInner() {
   const [portalStatus, setPortalStatus] = useState<"Active" | "Locked" | "Disabled">("Active");
   const [originalEmployeeSnapshot, setOriginalEmployeeSnapshot] = useState<EmployeeRecord | null>(null);
   const [isImportingBatch, setIsImportingBatch] = useState(false);
+  const [isDraggingBatchFile, setIsDraggingBatchFile] = useState(false);
   function handleEmployeePhotoUpload(file: File | null) {
     if (!file) return;
 
     if (!file.type.startsWith("image/")) {
       showFormWarning("Please upload an image file for the employee photo.");
+      return;
+    }
+
+    const MAX_PHOTO_BYTES = 50 * 1024 * 1024; // 50 MB
+    if (file.size > MAX_PHOTO_BYTES) {
+      showFormWarning("Employee photo must be 50 MB or smaller. Please choose a smaller image.");
       return;
     }
 
@@ -2033,8 +2052,8 @@ function applyBatchAllowanceAmount(nextAmount: string) {
       // Employee Type
       if (!row.employeeType.trim()) {
         errors.push("Employee Type is required.");
-      } else if (!["rank and file", "supervisory"].includes(row.employeeType.trim().toLowerCase())) {
-        errors.push("Employee Type must be 'Rank and File' or 'Supervisory'.");
+      } else if (!["rank and file", "supervisory", "managerial"].includes(row.employeeType.trim().toLowerCase())) {
+        errors.push("Employee Type must be 'Rank and File', 'Supervisory', or 'Managerial'.");
       }
 
       // Employment Status
@@ -2370,10 +2389,7 @@ function applyBatchAllowanceAmount(nextAmount: string) {
         uniformClothingAllowance: 0, laundryAllowance: 0, actualMedicalAssistance: 0,
         medicalCashAllowanceToDependents: 0, mealAllowance: 0, christmasAnniversaryGifts: 0,
         achievementAwards: 0, thirteenthMonthPay: 0, christmasBonus: 0, otherAllowanceName: "",
-        otherAllowanceAmount: 0, sss: "", philhealth: "", pagibig: "", tin: "", bankName: "",
-        bankAccountNumber: "", bankAccountType: "Savings", address: "", birthdate: "",
-        contactNumber: "", emailAddress: "", employmentClassification: "Rank-and-file",
-        immediateSupervisor: "",
+        otherAllowanceAmount: 0, employmentClassification: "Rank-and-file",
         // Preserve all existing fields so unrelated data is not overwritten
         ...(existingEmployee ?? {}),
         employeeNo: employeeId,
@@ -2398,6 +2414,20 @@ function applyBatchAllowanceAmount(nextAmount: string) {
         basicPayFrequency: "Monthly" as const,
         isMinimumWageEarner: row.minimumWageEarner.trim().toLowerCase() === "yes" ? "Yes" : "No",
         payrollExempt: row.exempt.trim().toLowerCase() === "yes" ? "Yes" : "No",
+        // Government IDs, bank, and contact details from the CSV (fall back to
+        // any existing value so a blank cell does not wipe saved data).
+        sss: row.sss?.trim() || existingEmployee?.sss || "",
+        philhealth: row.philhealth?.trim() || existingEmployee?.philhealth || "",
+        pagibig: row.pagibig?.trim() || existingEmployee?.pagibig || "",
+        tin: row.tin?.trim() || existingEmployee?.tin || "",
+        bankName: row.bankName?.trim() || existingEmployee?.bankName || "",
+        bankAccountType: row.bankAccountType?.trim() || existingEmployee?.bankAccountType || "Savings",
+        bankAccountNumber: row.bankAccountNumber?.trim() || existingEmployee?.bankAccountNumber || "",
+        birthdate: row.birthdate?.trim() || existingEmployee?.birthdate || "",
+        contactNumber: row.contactNumber?.trim() || existingEmployee?.contactNumber || "",
+        emailAddress: row.emailAddress?.trim() || existingEmployee?.emailAddress || "",
+        address: row.address?.trim() || existingEmployee?.address || "",
+        immediateSupervisor: row.immediateSupervisor?.trim() || existingEmployee?.immediateSupervisor || "",
         customAllowances: [
           ...(existingEmployee?.customAllowances?.filter((a) => a.name !== "De Minimis") ?? []),
           ...(row.allowances || row.customAllowances || []).map((a) => ({
@@ -2506,8 +2536,30 @@ function applyBatchAllowanceAmount(nextAmount: string) {
   }
 
   async function handleBatchImport(event: React.ChangeEvent<HTMLInputElement>) {
-    const file = event.target.files?.[0];
+    const file = event.target.files?.[0] || null;
+    // Reset the input so selecting the same file again still fires onChange.
+    event.target.value = "";
+    await processBatchFile(file);
+  }
+
+  async function handleBatchDrop(event: React.DragEvent<HTMLElement>) {
+    event.preventDefault();
+    setIsDraggingBatchFile(false);
+    if (isImportingBatch) return;
+    const file = event.dataTransfer?.files?.[0] || null;
+    await processBatchFile(file);
+  }
+
+  async function processBatchFile(file: File | null) {
     if (!file) return;
+
+    const isCsv = file.name.toLowerCase().endsWith(".csv") || file.type === "text/csv" || file.type === "application/vnd.ms-excel";
+    if (!isCsv) {
+      const message = "Please drop a .csv file exported from the template.";
+      setBatchImportMessage(message);
+      showFormWarning(message);
+      return;
+    }
 
     setIsImportingBatch(true);
     setIsExistingEmployeeBatchMode(false);
@@ -2532,7 +2584,7 @@ function applyBatchAllowanceAmount(nextAmount: string) {
       }
 
       const headers = parseCsvLine(lines[0]);
-      const missingHeaders = EMPLOYEE_IMPORT_HEADERS.filter(
+      const missingHeaders = REQUIRED_EMPLOYEE_IMPORT_HEADERS.filter(
         (header) => !headers.includes(header)
       );
 
@@ -2678,6 +2730,18 @@ function applyBatchAllowanceAmount(nextAmount: string) {
           workingDaysPerMonth: getBatchRowValue(values, headerIndexMap, "workingDaysPerMonth").trim() || "21.75",
           standardHoursPerDay: getBatchRowValue(values, headerIndexMap, "standardHoursPerDay").trim() || "8",
           exempt: getBatchRowValue(values, headerIndexMap, "exempt").trim(),
+          sss: getBatchRowValue(values, headerIndexMap, "sss").trim(),
+          philhealth: getBatchRowValue(values, headerIndexMap, "philhealth").trim(),
+          pagibig: getBatchRowValue(values, headerIndexMap, "pagibig").trim(),
+          tin: getBatchRowValue(values, headerIndexMap, "tin").trim(),
+          bankName: getBatchRowValue(values, headerIndexMap, "bankName").trim(),
+          bankAccountType: getBatchRowValue(values, headerIndexMap, "bankAccountType").trim(),
+          bankAccountNumber: getBatchRowValue(values, headerIndexMap, "bankAccountNumber").trim(),
+          birthdate: normalizeEmployeeImportDateToIso(getBatchRowValue(values, headerIndexMap, "birthdate")),
+          contactNumber: getBatchRowValue(values, headerIndexMap, "contactNumber").trim(),
+          emailAddress: getBatchRowValue(values, headerIndexMap, "emailAddress").trim(),
+          address: getBatchRowValue(values, headerIndexMap, "address").trim(),
+          immediateSupervisor: getBatchRowValue(values, headerIndexMap, "immediateSupervisor").trim(),
           allowances,
           customAllowances,
           loans,
@@ -2720,7 +2784,6 @@ function applyBatchAllowanceAmount(nextAmount: string) {
       showFormWarning(message);
     } finally {
       setIsImportingBatch(false);
-      event.target.value = "";
     }
   }
 
@@ -2756,6 +2819,18 @@ function applyBatchAllowanceAmount(nextAmount: string) {
       workingDaysPerMonth: String(days),
       standardHoursPerDay: String(hours),
       exempt: employee.payrollExempt?.toLowerCase() === "yes" ? "Yes" : "No",
+      sss: employee.sss || "",
+      philhealth: employee.philhealth || "",
+      pagibig: employee.pagibig || "",
+      tin: employee.tin || "",
+      bankName: employee.bankName || "",
+      bankAccountType: employee.bankAccountType || "",
+      bankAccountNumber: employee.bankAccountNumber || "",
+      birthdate: employee.birthdate || "",
+      contactNumber: employee.contactNumber || "",
+      emailAddress: employee.emailAddress || "",
+      address: employee.address || "",
+      immediateSupervisor: employee.immediateSupervisor || "",
       customAllowances: employee.customAllowances || [],
       loans: [],
     };
@@ -2818,8 +2893,8 @@ function applyBatchAllowanceAmount(nextAmount: string) {
     }
 
     // Validate the chosen Employee Type / Employment Status only when one is provided.
-    if (employeeType.trim() && !["Rank and File", "Supervisory"].includes(employeeType.trim())) {
-      showFormWarning("Employee Type must be Rank and File or Supervisory.");
+    if (employeeType.trim() && !["Rank and File", "Supervisory", "Managerial"].includes(employeeType.trim())) {
+      showFormWarning("Employee Type must be Rank and File, Supervisory, or Managerial.");
       return;
     }
 
@@ -2927,7 +3002,12 @@ function applyBatchAllowanceAmount(nextAmount: string) {
       department: finalDepartment,
       jobTitle: jobTitle.trim(),
       employeeType: employeeType.trim(),
-      employmentClassification: employeeType.trim().toLowerCase() === "supervisory" ? "Supervisory" : "Rank-and-file",
+      employmentClassification:
+        employeeType.trim().toLowerCase() === "supervisory"
+          ? "Supervisory"
+          : employeeType.trim().toLowerCase() === "managerial"
+            ? "Managerial"
+            : "Rank-and-file",
       isMinimumWageEarner: isMinimumWageEarner.trim(),
       immediateSupervisor: immediateSupervisor.trim(),
       designatedWorkplace: designatedWorkplace.trim(),
@@ -3257,12 +3337,16 @@ function applyBatchAllowanceAmount(nextAmount: string) {
                   </button>
 
                   <label
-                    className="relative flex cursor-pointer items-center justify-between gap-4 rounded-2xl border-2 border-dashed border-sky-200 bg-gradient-to-br from-sky-50 to-white px-5 py-3.5 transition hover:border-[#0a4f8f] hover:shadow-md"
+                    onDragOver={(e) => { e.preventDefault(); if (!isImportingBatch) setIsDraggingBatchFile(true); }}
+                    onDragEnter={(e) => { e.preventDefault(); if (!isImportingBatch) setIsDraggingBatchFile(true); }}
+                    onDragLeave={(e) => { e.preventDefault(); setIsDraggingBatchFile(false); }}
+                    onDrop={handleBatchDrop}
+                    className={`relative flex cursor-pointer items-center justify-between gap-4 rounded-2xl border-2 border-dashed px-5 py-3.5 transition hover:shadow-md ${isDraggingBatchFile ? "border-[#0a4f8f] bg-sky-100 ring-2 ring-sky-300" : "border-sky-200 bg-gradient-to-br from-sky-50 to-white hover:border-[#0a4f8f]"}`}
                     style={{ cursor: isImportingBatch ? "not-allowed" : "pointer" }}
                   >
                     <div>
-                      <p className="text-sm font-bold text-slate-900">Browse CSV</p>
-                      <p className="mt-0.5 text-xs font-medium text-slate-500">Upload completed template</p>
+                      <p className="text-sm font-bold text-slate-900">{isDraggingBatchFile ? "Drop CSV to import" : "Browse or drag & drop CSV"}</p>
+                      <p className="mt-0.5 text-xs font-medium text-slate-500">Drag a file here or click to upload the completed template</p>
                     </div>
                     <span className="shrink-0 inline-flex items-center justify-center rounded-xl bg-[#0a4f8f] px-4 py-2 text-sm font-bold text-white shadow-[0_10px_20px_-12px_rgba(14,116,144,0.7)]">
                       Browse
@@ -3687,7 +3771,7 @@ function applyBatchAllowanceAmount(nextAmount: string) {
                               : row[header as (typeof EMPLOYEE_IMPORT_HEADERS)[number]] || "";
                             const isInvalidCell =
                               (isRequiredField && !String(value).trim()) ||
-                              (header === "employeeType" && String(value).trim() && !["rank and file", "supervisory"].includes(String(value).trim().toLowerCase())) ||
+                              (header === "employeeType" && String(value).trim() && !["rank and file", "supervisory", "managerial"].includes(String(value).trim().toLowerCase())) ||
                               (header === "employmentStatus" && String(value).trim() && !["regular", "probationary", "terminated"].includes(String(value).trim().toLowerCase())) ||
                               (header === "gender" && String(value).trim() && !["male", "female"].includes(String(value).trim().toLowerCase())) ||
                               (header === "minimumWageEarner" && String(value).trim() && !["yes", "no"].includes(String(value).trim().toLowerCase())) ||
@@ -4171,6 +4255,7 @@ function applyBatchAllowanceAmount(nextAmount: string) {
               >
                 <option value="Rank and File">Rank and File</option>
                 <option value="Supervisory">Supervisory</option>
+                <option value="Managerial">Managerial</option>
               </SelectField>
             </label>
             <label>
