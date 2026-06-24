@@ -527,7 +527,6 @@ export default function CompanyPage() {
   };
 
   const handleSave = () => {
-    if (!form.companyName.trim()) { window.alert("Please enter the company name."); return; }
     if (!window.confirm("Save company profile changes? This affects payslips, reports, and company information across the system.")) return;
     setConfigItem(storageKeys.companyInformation, form);
     setSavedCompany(form); setIsEditing(false);
@@ -554,17 +553,6 @@ export default function CompanyPage() {
   }
 
   function handleSaveStatutory() {
-    const req: Array<[string, string]> = [
-      ["Company TIN", statutoryForm.companyTin], ["RDO Code", statutoryForm.rdoCode], ["BIR Contact Email", statutoryForm.birContactEmail],
-      ["SSS Employer Number", statutoryForm.sssEmployerNo], ["Date of Coverage", statutoryForm.sssDateOfCoverage],
-      ["SSS Contact Person", statutoryForm.sssContactPerson], ["SSS Contact Email", statutoryForm.sssContactEmail],
-      ["PhilHealth Employer Number", statutoryForm.philhealthEmployerNo], ["PhilHealth Contact Number", statutoryForm.philhealthContactNumber],
-      ["PhilHealth Email", statutoryForm.philhealthEmail], ["PhilHealth Postal Code", statutoryForm.philhealthPostalCode],
-      ["Pag-IBIG Employer Number", statutoryForm.pagibigEmployerNo], ["Pag-IBIG Contact Person", statutoryForm.pagibigContactPerson],
-      ["Pag-IBIG Contact Email", statutoryForm.pagibigContactEmail],
-    ];
-    const missing = req.find(([, v]) => !v.trim());
-    if (missing) { window.alert(`${missing[0]} is required.`); return; }
     if (!window.confirm("Save statutory information? This affects government reports, payroll records, and payslips.")) return;
     setConfigItem(storageKeys.statutoryInfo, statutoryForm);
     setSavedStatutory(statutoryForm); setIsEditingStatutory(false);
@@ -600,17 +588,6 @@ export default function CompanyPage() {
   }
 
   function handleSaveSignatories() {
-    const req: Array<[string, string]> = [
-      ["Prepared By Name", signatoryForm.preparedByName], ["Prepared By Position", signatoryForm.preparedByPosition],
-      ["Checked By Name", signatoryForm.checkedByName], ["Checked By Position", signatoryForm.checkedByPosition],
-      ["Approved By Name", signatoryForm.approvedByName], ["Approved By Position", signatoryForm.approvedByPosition],
-      ["Authorized Representative Name", signatoryForm.authorizedRepName], ["Authorized Representative Position", signatoryForm.authorizedRepPosition],
-      ["Authorized Representative TIN", signatoryForm.authorizedRepTin],
-      ["Prepared By Signature", signatoryForm.preparedBySignature], ["Checked By Signature", signatoryForm.checkedBySignature],
-      ["Approved By Signature", signatoryForm.approvedBySignature], ["Authorized Representative Signature", signatoryForm.authorizedRepSignature],
-    ];
-    const missing = req.find(([, v]) => !v.trim());
-    if (missing) { window.alert(`${missing[0]} is required.`); return; }
     if (!window.confirm("Save signatory changes? This affects payroll records, payslips, reports, and tax outputs.")) return;
     setConfigItem(storageKeys.signatories, signatoryForm);
     setSavedSignatories(signatoryForm); setIsEditingSignatories(false);
@@ -744,7 +721,7 @@ export default function CompanyPage() {
                   <Section title="Company Identity" helper="Official details">
                     <div className="grid gap-4 md:grid-cols-2">
                       <label className="grid gap-2">
-                        <FieldLabel required>Company Name</FieldLabel>
+                        <FieldLabel>Company Name</FieldLabel>
                         <InputField value={form.companyName} onChange={(e) => updateField("companyName", e.target.value)} placeholder="Enter company name" />
                       </label>
                       <label className="grid gap-2">
@@ -752,15 +729,15 @@ export default function CompanyPage() {
                         <InputField value={form.tradeName} onChange={(e) => updateField("tradeName", e.target.value)} placeholder="Enter trade name or branch name" />
                       </label>
                       <label className="grid gap-2 md:col-span-2">
-                        <FieldLabel required>Company Address</FieldLabel>
+                        <FieldLabel>Company Address</FieldLabel>
                         <TextAreaField value={form.address} onChange={(e) => updateField("address", e.target.value)} placeholder="Enter complete company address" />
                       </label>
                       <label className="grid gap-2">
-                        <FieldLabel required>Contact Number</FieldLabel>
+                        <FieldLabel>Contact Number</FieldLabel>
                         <InputField value={form.contactNumber} onChange={(e) => updateField("contactNumber", e.target.value)} placeholder="Enter contact number" />
                       </label>
                       <label className="grid gap-2">
-                        <FieldLabel required>Email Address</FieldLabel>
+                        <FieldLabel>Email Address</FieldLabel>
                         <InputField type="email" value={form.emailAddress} onChange={(e) => updateField("emailAddress", e.target.value)} placeholder="Enter email address" />
                       </label>
                     </div>
@@ -921,76 +898,76 @@ export default function CompanyPage() {
                   <Section title="BIR / Tax Information" helper="Tax setup">
                     <div className="grid gap-4 md:grid-cols-3">
                       <label className="grid gap-2">
-                        <FieldLabel required>Company TIN</FieldLabel>
-                        <InputField required value={statutoryForm.companyTin} onChange={(e) => updateStatutoryField("companyTin", formatTin(e.target.value))} placeholder="000-000-000-00000" maxLength={17} />
+                        <FieldLabel>Company TIN</FieldLabel>
+                        <InputField value={statutoryForm.companyTin} onChange={(e) => updateStatutoryField("companyTin", formatTin(e.target.value))} placeholder="000-000-000-00000" maxLength={17} />
                       </label>
                       <label className="grid gap-2">
-                        <FieldLabel required>RDO Code</FieldLabel>
-                        <InputField required value={statutoryForm.rdoCode} onChange={(e) => updateStatutoryField("rdoCode", formatRdoCode(e.target.value))} placeholder="000" maxLength={3} />
+                        <FieldLabel>RDO Code</FieldLabel>
+                        <InputField value={statutoryForm.rdoCode} onChange={(e) => updateStatutoryField("rdoCode", formatRdoCode(e.target.value))} placeholder="000" maxLength={3} />
                       </label>
                       <label className="grid gap-2">
-                        <FieldLabel required>BIR Contact Email</FieldLabel>
-                        <InputField type="email" required value={statutoryForm.birContactEmail} onChange={(e) => updateStatutoryField("birContactEmail", e.target.value)} placeholder="bir@example.com" />
+                        <FieldLabel>BIR Contact Email</FieldLabel>
+                        <InputField type="email" value={statutoryForm.birContactEmail} onChange={(e) => updateStatutoryField("birContactEmail", e.target.value)} placeholder="bir@example.com" />
                       </label>
                     </div>
                   </Section>
                   <Section title="SSS Information" helper="Employer coverage">
                     <div className="grid gap-4 md:grid-cols-2">
                       <label className="grid gap-2">
-                        <FieldLabel required>SSS Employer Number</FieldLabel>
-                        <InputField required value={statutoryForm.sssEmployerNo} onChange={(e) => updateStatutoryField("sssEmployerNo", formatEmployerNumber(e.target.value))} placeholder="Digits only" maxLength={12} />
+                        <FieldLabel>SSS Employer Number</FieldLabel>
+                        <InputField value={statutoryForm.sssEmployerNo} onChange={(e) => updateStatutoryField("sssEmployerNo", formatEmployerNumber(e.target.value))} placeholder="Digits only" maxLength={12} />
                       </label>
                       <label className="grid gap-2">
-                        <FieldLabel required>Date of Coverage</FieldLabel>
-                        <InputField type="date" required value={statutoryForm.sssDateOfCoverage} onChange={(e) => updateStatutoryField("sssDateOfCoverage", e.target.value)} />
+                        <FieldLabel>Date of Coverage</FieldLabel>
+                        <InputField type="date" value={statutoryForm.sssDateOfCoverage} onChange={(e) => updateStatutoryField("sssDateOfCoverage", e.target.value)} />
                       </label>
                       <label className="grid gap-2">
-                        <FieldLabel required>SSS Contact Person</FieldLabel>
-                        <InputField required value={statutoryForm.sssContactPerson} onChange={(e) => updateStatutoryField("sssContactPerson", e.target.value)} placeholder="Contact person" />
+                        <FieldLabel>SSS Contact Person</FieldLabel>
+                        <InputField value={statutoryForm.sssContactPerson} onChange={(e) => updateStatutoryField("sssContactPerson", e.target.value)} placeholder="Contact person" />
                       </label>
                       <label className="grid gap-2">
-                        <FieldLabel required>SSS Contact Email</FieldLabel>
-                        <InputField type="email" required value={statutoryForm.sssContactEmail} onChange={(e) => updateStatutoryField("sssContactEmail", e.target.value)} placeholder="sss@example.com" />
+                        <FieldLabel>SSS Contact Email</FieldLabel>
+                        <InputField type="email" value={statutoryForm.sssContactEmail} onChange={(e) => updateStatutoryField("sssContactEmail", e.target.value)} placeholder="sss@example.com" />
                       </label>
                     </div>
                   </Section>
                   <Section title="PhilHealth Information" helper="Health coverage">
                     <div className="grid gap-4 md:grid-cols-2">
                       <label className="grid gap-2">
-                        <FieldLabel required>PhilHealth Employer Number</FieldLabel>
-                        <InputField required value={statutoryForm.philhealthEmployerNo} onChange={(e) => updateStatutoryField("philhealthEmployerNo", formatEmployerNumber(e.target.value))} placeholder="Digits only" maxLength={12} />
+                        <FieldLabel>PhilHealth Employer Number</FieldLabel>
+                        <InputField value={statutoryForm.philhealthEmployerNo} onChange={(e) => updateStatutoryField("philhealthEmployerNo", formatEmployerNumber(e.target.value))} placeholder="Digits only" maxLength={12} />
                       </label>
                       <label className="grid gap-2">
-                        <FieldLabel required>Contact Number</FieldLabel>
-                        <InputField required value={statutoryForm.philhealthContactNumber} onChange={(e) => updateStatutoryField("philhealthContactNumber", formatPhoneNumber(e.target.value))} placeholder="+63" maxLength={20} />
+                        <FieldLabel>Contact Number</FieldLabel>
+                        <InputField value={statutoryForm.philhealthContactNumber} onChange={(e) => updateStatutoryField("philhealthContactNumber", formatPhoneNumber(e.target.value))} placeholder="+63" maxLength={20} />
                       </label>
                       <label className="grid gap-2">
-                        <FieldLabel required>Email Address</FieldLabel>
-                        <InputField type="email" required value={statutoryForm.philhealthEmail} onChange={(e) => updateStatutoryField("philhealthEmail", e.target.value)} placeholder="philhealth@example.com" />
+                        <FieldLabel>Email Address</FieldLabel>
+                        <InputField type="email" value={statutoryForm.philhealthEmail} onChange={(e) => updateStatutoryField("philhealthEmail", e.target.value)} placeholder="philhealth@example.com" />
                       </label>
                       <label className="grid gap-2">
-                        <FieldLabel required>Postal Code</FieldLabel>
-                        <InputField required value={statutoryForm.philhealthPostalCode} onChange={(e) => updateStatutoryField("philhealthPostalCode", formatPostalCode(e.target.value))} placeholder="0000" maxLength={4} />
+                        <FieldLabel>Postal Code</FieldLabel>
+                        <InputField value={statutoryForm.philhealthPostalCode} onChange={(e) => updateStatutoryField("philhealthPostalCode", formatPostalCode(e.target.value))} placeholder="0000" maxLength={4} />
                       </label>
                     </div>
                   </Section>
                   <Section title="Pag-IBIG Information" helper="HDMF profile">
                     <div className="grid gap-4 md:grid-cols-2">
                       <label className="grid gap-2">
-                        <FieldLabel required>Pag-IBIG Employer Number</FieldLabel>
-                        <InputField required value={statutoryForm.pagibigEmployerNo} onChange={(e) => updateStatutoryField("pagibigEmployerNo", formatEmployerNumber(e.target.value))} placeholder="Digits only" maxLength={12} />
+                        <FieldLabel>Pag-IBIG Employer Number</FieldLabel>
+                        <InputField value={statutoryForm.pagibigEmployerNo} onChange={(e) => updateStatutoryField("pagibigEmployerNo", formatEmployerNumber(e.target.value))} placeholder="Digits only" maxLength={12} />
                       </label>
                       <label className="grid gap-2">
                         <FieldLabel>Branch Code</FieldLabel>
                         <InputField value={statutoryForm.pagibigBranchCode} onChange={(e) => updateStatutoryField("pagibigBranchCode", formatBranchCode(e.target.value))} placeholder="0000" maxLength={4} />
                       </label>
                       <label className="grid gap-2">
-                        <FieldLabel required>Pag-IBIG Contact Person</FieldLabel>
-                        <InputField required value={statutoryForm.pagibigContactPerson} onChange={(e) => updateStatutoryField("pagibigContactPerson", e.target.value)} placeholder="Contact person" />
+                        <FieldLabel>Pag-IBIG Contact Person</FieldLabel>
+                        <InputField value={statutoryForm.pagibigContactPerson} onChange={(e) => updateStatutoryField("pagibigContactPerson", e.target.value)} placeholder="Contact person" />
                       </label>
                       <label className="grid gap-2">
-                        <FieldLabel required>Pag-IBIG Contact Email</FieldLabel>
-                        <InputField type="email" required value={statutoryForm.pagibigContactEmail} onChange={(e) => updateStatutoryField("pagibigContactEmail", e.target.value)} placeholder="pagibig@example.com" />
+                        <FieldLabel>Pag-IBIG Contact Email</FieldLabel>
+                        <InputField type="email" value={statutoryForm.pagibigContactEmail} onChange={(e) => updateStatutoryField("pagibigContactEmail", e.target.value)} placeholder="pagibig@example.com" />
                       </label>
                     </div>
                   </Section>
@@ -1087,44 +1064,44 @@ export default function CompanyPage() {
               <div className="space-y-5">
                 <div className="grid gap-4 md:grid-cols-2">
                   <label className="grid gap-2">
-                    <FieldLabel required>Prepared By Name</FieldLabel>
-                    <InputField required value={signatoryForm.preparedByName} onChange={(e) => updateSignatoryField("preparedByName", e.target.value)} placeholder="Name" />
+                    <FieldLabel>Prepared By Name</FieldLabel>
+                    <InputField value={signatoryForm.preparedByName} onChange={(e) => updateSignatoryField("preparedByName", e.target.value)} placeholder="Name" />
                   </label>
                   <label className="grid gap-2">
-                    <FieldLabel required>Prepared By Position</FieldLabel>
-                    <InputField required value={signatoryForm.preparedByPosition} onChange={(e) => updateSignatoryField("preparedByPosition", e.target.value)} placeholder="Position" />
+                    <FieldLabel>Prepared By Position</FieldLabel>
+                    <InputField value={signatoryForm.preparedByPosition} onChange={(e) => updateSignatoryField("preparedByPosition", e.target.value)} placeholder="Position" />
                   </label>
                   <label className="grid gap-2">
-                    <FieldLabel required>Checked By Name</FieldLabel>
-                    <InputField required value={signatoryForm.checkedByName} onChange={(e) => updateSignatoryField("checkedByName", e.target.value)} placeholder="Name" />
+                    <FieldLabel>Checked By Name</FieldLabel>
+                    <InputField value={signatoryForm.checkedByName} onChange={(e) => updateSignatoryField("checkedByName", e.target.value)} placeholder="Name" />
                   </label>
                   <label className="grid gap-2">
-                    <FieldLabel required>Checked By Position</FieldLabel>
-                    <InputField required value={signatoryForm.checkedByPosition} onChange={(e) => updateSignatoryField("checkedByPosition", e.target.value)} placeholder="Position" />
+                    <FieldLabel>Checked By Position</FieldLabel>
+                    <InputField value={signatoryForm.checkedByPosition} onChange={(e) => updateSignatoryField("checkedByPosition", e.target.value)} placeholder="Position" />
                   </label>
                   <label className="grid gap-2">
-                    <FieldLabel required>Approved By Name</FieldLabel>
-                    <InputField required value={signatoryForm.approvedByName} onChange={(e) => updateSignatoryField("approvedByName", e.target.value)} placeholder="Name" />
+                    <FieldLabel>Approved By Name</FieldLabel>
+                    <InputField value={signatoryForm.approvedByName} onChange={(e) => updateSignatoryField("approvedByName", e.target.value)} placeholder="Name" />
                   </label>
                   <label className="grid gap-2">
-                    <FieldLabel required>Approved By Position</FieldLabel>
-                    <InputField required value={signatoryForm.approvedByPosition} onChange={(e) => updateSignatoryField("approvedByPosition", e.target.value)} placeholder="Position" />
+                    <FieldLabel>Approved By Position</FieldLabel>
+                    <InputField value={signatoryForm.approvedByPosition} onChange={(e) => updateSignatoryField("approvedByPosition", e.target.value)} placeholder="Position" />
                   </label>
                 </div>
                 <div className="border-t border-slate-100 pt-5">
                   <p className="mb-3 text-xs font-semibold uppercase tracking-wide text-slate-500">BIR Representative</p>
                   <div className="grid gap-4 md:grid-cols-3">
                     <label className="grid gap-2">
-                      <FieldLabel required>Authorized Representative Name</FieldLabel>
-                      <InputField required value={signatoryForm.authorizedRepName} onChange={(e) => updateSignatoryField("authorizedRepName", e.target.value)} placeholder="Name" />
+                      <FieldLabel>Authorized Representative Name</FieldLabel>
+                      <InputField value={signatoryForm.authorizedRepName} onChange={(e) => updateSignatoryField("authorizedRepName", e.target.value)} placeholder="Name" />
                     </label>
                     <label className="grid gap-2">
-                      <FieldLabel required>Authorized Representative Position</FieldLabel>
-                      <InputField required value={signatoryForm.authorizedRepPosition} onChange={(e) => updateSignatoryField("authorizedRepPosition", e.target.value)} placeholder="Position" />
+                      <FieldLabel>Authorized Representative Position</FieldLabel>
+                      <InputField value={signatoryForm.authorizedRepPosition} onChange={(e) => updateSignatoryField("authorizedRepPosition", e.target.value)} placeholder="Position" />
                     </label>
                     <label className="grid gap-2">
-                      <FieldLabel required>Authorized Representative TIN</FieldLabel>
-                      <InputField required value={signatoryForm.authorizedRepTin} onChange={(e) => updateSignatoryField("authorizedRepTin", formatTin(e.target.value))} placeholder="000-000-000-00000" maxLength={17} />
+                      <FieldLabel>Authorized Representative TIN</FieldLabel>
+                      <InputField value={signatoryForm.authorizedRepTin} onChange={(e) => updateSignatoryField("authorizedRepTin", formatTin(e.target.value))} placeholder="000-000-000-00000" maxLength={17} />
                     </label>
                   </div>
                 </div>
@@ -1166,22 +1143,22 @@ export default function CompanyPage() {
               <div className="space-y-5">
                 <div className="grid gap-4 md:grid-cols-2">
                   <label className="grid gap-2">
-                    <FieldLabel required>Prepared By Signature</FieldLabel>
+                    <FieldLabel>Prepared By Signature</FieldLabel>
                     <InputField type="file" accept="image/*" onChange={(e) => handleSignatureUpload("preparedBySignature", e)} />
                     <HelperText>Clean image on white or transparent background.</HelperText>
                   </label>
                   <label className="grid gap-2">
-                    <FieldLabel required>Checked By Signature</FieldLabel>
+                    <FieldLabel>Checked By Signature</FieldLabel>
                     <InputField type="file" accept="image/*" onChange={(e) => handleSignatureUpload("checkedBySignature", e)} />
                     <HelperText>Clean image on white or transparent background.</HelperText>
                   </label>
                   <label className="grid gap-2">
-                    <FieldLabel required>Approved By Signature</FieldLabel>
+                    <FieldLabel>Approved By Signature</FieldLabel>
                     <InputField type="file" accept="image/*" onChange={(e) => handleSignatureUpload("approvedBySignature", e)} />
                     <HelperText>Clean image on white or transparent background.</HelperText>
                   </label>
                   <label className="grid gap-2">
-                    <FieldLabel required>Authorized Representative Signature</FieldLabel>
+                    <FieldLabel>Authorized Representative Signature</FieldLabel>
                     <InputField type="file" accept="image/*" onChange={(e) => handleSignatureUpload("authorizedRepSignature", e)} />
                     <HelperText>Clean image on white or transparent background.</HelperText>
                   </label>

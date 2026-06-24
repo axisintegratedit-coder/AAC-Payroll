@@ -365,29 +365,6 @@ export default function StatutoryInformationPage() {
   }
 
   function handleSave() {
-    const requiredFields: Array<[string, string]> = [
-      ["Company TIN", form.companyTin],
-      ["RDO Code", form.rdoCode],
-      ["BIR Contact Email", form.birContactEmail],
-      ["SSS Employer Number", form.sssEmployerNo],
-      ["Date of Coverage", form.sssDateOfCoverage],
-      ["SSS Contact Person", form.sssContactPerson],
-      ["SSS Contact Email", form.sssContactEmail],
-      ["PhilHealth Employer Number", form.philhealthEmployerNo],
-      ["PhilHealth Contact Number", form.philhealthContactNumber],
-      ["PhilHealth Email", form.philhealthEmail],
-      ["PhilHealth Postal Code", form.philhealthPostalCode],
-      ["Pag-IBIG Employer Number", form.pagibigEmployerNo],
-      ["Pag-IBIG Contact Person", form.pagibigContactPerson],
-      ["Pag-IBIG Contact Email", form.pagibigContactEmail],
-    ];
-
-    const missing = requiredFields.find(([, value]) => !value.trim());
-    if (missing) {
-      window.alert(`${missing[0]} is required.`);
-      return;
-    }
-
     const confirmed = window.confirm(
       "Are you sure you want to save these statutory information changes? This may affect government contribution reports, payroll records, payslips, and statutory information shown across the system."
     );
@@ -512,9 +489,8 @@ export default function StatutoryInformationPage() {
               <Section title="BIR / Tax Information" helper="Tax setup" accent="blue">
                 <div className="grid gap-4 md:grid-cols-3">
                   <label className="grid gap-2">
-                    <FieldLabel required>Company TIN</FieldLabel>
+                    <FieldLabel>Company TIN</FieldLabel>
                     <InputField
-                      required
                       value={form.companyTin}
                       onChange={(e) => updateField("companyTin", formatTin(e.target.value))}
                       placeholder="000-000-000-00000"
@@ -523,9 +499,8 @@ export default function StatutoryInformationPage() {
                   </label>
 
                   <label className="grid gap-2">
-                    <FieldLabel required>RDO Code</FieldLabel>
+                    <FieldLabel>RDO Code</FieldLabel>
                     <InputField
-                      required
                       value={form.rdoCode}
                       onChange={(e) => updateField("rdoCode", formatRdoCode(e.target.value))}
                       placeholder="000"
@@ -534,10 +509,9 @@ export default function StatutoryInformationPage() {
                   </label>
 
                   <label className="grid gap-2">
-                    <FieldLabel required>BIR Contact Email</FieldLabel>
+                    <FieldLabel>BIR Contact Email</FieldLabel>
                     <InputField
                       type="email"
-                      required
                       value={form.birContactEmail}
                       onChange={(e) => updateField("birContactEmail", e.target.value)}
                       placeholder="bir@example.com"
@@ -549,9 +523,8 @@ export default function StatutoryInformationPage() {
               <Section title="SSS Information" helper="Employer coverage" accent="emerald">
                 <div className="grid gap-4 md:grid-cols-2">
                   <label className="grid gap-2">
-                    <FieldLabel required>SSS Employer Number</FieldLabel>
+                    <FieldLabel>SSS Employer Number</FieldLabel>
                     <InputField
-                      required
                       value={form.sssEmployerNo}
                       onChange={(e) => updateField("sssEmployerNo", formatEmployerNumber(e.target.value))}
                       placeholder="Digits only"
@@ -560,19 +533,17 @@ export default function StatutoryInformationPage() {
                   </label>
 
                   <label className="grid gap-2">
-                    <FieldLabel required>Date of Coverage</FieldLabel>
+                    <FieldLabel>Date of Coverage</FieldLabel>
                     <InputField
                       type="date"
-                      required
                       value={form.sssDateOfCoverage}
                       onChange={(e) => updateField("sssDateOfCoverage", e.target.value)}
                     />
                   </label>
 
                   <label className="grid gap-2">
-                    <FieldLabel required>SSS Contact Person</FieldLabel>
+                    <FieldLabel>SSS Contact Person</FieldLabel>
                     <InputField
-                      required
                       value={form.sssContactPerson}
                       onChange={(e) => updateField("sssContactPerson", e.target.value)}
                       placeholder="Contact person"
@@ -580,10 +551,9 @@ export default function StatutoryInformationPage() {
                   </label>
 
                   <label className="grid gap-2">
-                    <FieldLabel required>SSS Contact Email</FieldLabel>
+                    <FieldLabel>SSS Contact Email</FieldLabel>
                     <InputField
                       type="email"
-                      required
                       value={form.sssContactEmail}
                       onChange={(e) => updateField("sssContactEmail", e.target.value)}
                       placeholder="sss@example.com"
@@ -595,9 +565,8 @@ export default function StatutoryInformationPage() {
               <Section title="PhilHealth Information" helper="Health coverage" accent="purple">
                 <div className="grid gap-4 md:grid-cols-2">
                   <label className="grid gap-2">
-                    <FieldLabel required>PhilHealth Employer Number</FieldLabel>
+                    <FieldLabel>PhilHealth Employer Number</FieldLabel>
                     <InputField
-                      required
                       value={form.philhealthEmployerNo}
                       onChange={(e) => updateField("philhealthEmployerNo", formatEmployerNumber(e.target.value))}
                       placeholder="Digits only"
@@ -606,9 +575,8 @@ export default function StatutoryInformationPage() {
                   </label>
 
                   <label className="grid gap-2">
-                    <FieldLabel required>Contact Number</FieldLabel>
+                    <FieldLabel>Contact Number</FieldLabel>
                     <InputField
-                      required
                       value={form.philhealthContactNumber}
                       onChange={(e) => updateField("philhealthContactNumber", formatPhoneNumber(e.target.value))}
                       placeholder="+63"
@@ -617,10 +585,9 @@ export default function StatutoryInformationPage() {
                   </label>
 
                   <label className="grid gap-2">
-                    <FieldLabel required>Email Address</FieldLabel>
+                    <FieldLabel>Email Address</FieldLabel>
                     <InputField
                       type="email"
-                      required
                       value={form.philhealthEmail}
                       onChange={(e) => updateField("philhealthEmail", e.target.value)}
                       placeholder="philhealth@example.com"
@@ -628,9 +595,8 @@ export default function StatutoryInformationPage() {
                   </label>
 
                   <label className="grid gap-2">
-                    <FieldLabel required>Postal Code</FieldLabel>
+                    <FieldLabel>Postal Code</FieldLabel>
                     <InputField
-                      required
                       value={form.philhealthPostalCode}
                       onChange={(e) => updateField("philhealthPostalCode", formatPostalCode(e.target.value))}
                       placeholder="0000"
@@ -643,9 +609,8 @@ export default function StatutoryInformationPage() {
               <Section title="Pag-IBIG Information" helper="HDMF profile" accent="amber">
                 <div className="grid gap-4 md:grid-cols-2">
                   <label className="grid gap-2">
-                    <FieldLabel required>Pag-IBIG Employer Number</FieldLabel>
+                    <FieldLabel>Pag-IBIG Employer Number</FieldLabel>
                     <InputField
-                      required
                       value={form.pagibigEmployerNo}
                       onChange={(e) => updateField("pagibigEmployerNo", formatEmployerNumber(e.target.value))}
                       placeholder="Digits only"
@@ -664,9 +629,8 @@ export default function StatutoryInformationPage() {
                   </label>
 
                   <label className="grid gap-2">
-                    <FieldLabel required>Pag-IBIG Contact Person</FieldLabel>
+                    <FieldLabel>Pag-IBIG Contact Person</FieldLabel>
                     <InputField
-                      required
                       value={form.pagibigContactPerson}
                       onChange={(e) => updateField("pagibigContactPerson", e.target.value)}
                       placeholder="Contact person"
@@ -674,10 +638,9 @@ export default function StatutoryInformationPage() {
                   </label>
 
                   <label className="grid gap-2">
-                    <FieldLabel required>Pag-IBIG Contact Email</FieldLabel>
+                    <FieldLabel>Pag-IBIG Contact Email</FieldLabel>
                     <InputField
                       type="email"
-                      required
                       value={form.pagibigContactEmail}
                       onChange={(e) => updateField("pagibigContactEmail", e.target.value)}
                       placeholder="pagibig@example.com"

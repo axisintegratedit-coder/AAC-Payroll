@@ -309,28 +309,6 @@ export default function PayrollSettingsPage() {
   }
 
   function handleSave() {
-    const requiredFields: Array<[string, string]> = [
-      ["Payroll Frequency", form.payrollFrequency],
-      ["First Cutoff End Date", form.firstCutoffEnd],
-      ["Daily Rate Divisor", form.dailyRateDivisor],
-      ["Hourly Rate Divisor", form.hourlyRateDivisor],
-    ];
-
-    if (isSemiMonthlyPayroll || isWeeklyPayroll) {
-      requiredFields.push(["Second Cutoff End Date", form.secondCutoffEnd]);
-    }
-
-    if (isWeeklyPayroll) {
-      requiredFields.push(["Third Cutoff End Date", form.thirdCutoffEnd]);
-      requiredFields.push(["Fourth Cutoff End Date", form.fourthCutoffEnd]);
-    }
-
-    const missing = requiredFields.find(([, value]) => !String(value).trim());
-    if (missing) {
-      window.alert(`${missing[0]} is required.`);
-      return;
-    }
-
     const confirmed = window.confirm(
       "Are you sure you want to save these payroll settings changes? This may affect payroll computations, government deductions, payroll runs, payslips, and reports across the system."
     );
@@ -404,7 +382,7 @@ export default function PayrollSettingsPage() {
 
                 <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
                   <label className="grid gap-2">
-                    <FieldLabel required>Payroll Frequency</FieldLabel>
+                    <FieldLabel>Payroll Frequency</FieldLabel>
                     <SelectField
                       value={form.payrollFrequency}
                       onChange={(e) => updateField("payrollFrequency", e.target.value as PayrollSettings["payrollFrequency"])}
@@ -417,11 +395,10 @@ export default function PayrollSettingsPage() {
                   </label>
 
                   <label className="grid gap-2">
-                    <FieldLabel required>
+                    <FieldLabel>
                       {isMonthlyPayroll ? "Payroll End Date" : isSemiMonthlyPayroll ? "First Cutoff End Date" : "Week 1 Cutoff End Date"}
                     </FieldLabel>
                     <InputField
-                      required
                       value={form.firstCutoffEnd}
                       onChange={(e) => updateField("firstCutoffEnd", formatDayOfMonth(e.target.value))}
                       placeholder={isMonthlyPayroll ? "30" : isSemiMonthlyPayroll ? "15" : "7"}
@@ -432,9 +409,8 @@ export default function PayrollSettingsPage() {
 
                   {isSemiMonthlyPayroll || isWeeklyPayroll ? (
                     <label className="grid gap-2">
-                      <FieldLabel required>{isSemiMonthlyPayroll ? "Second Cutoff End Date" : "Week 2 Cutoff End Date"}</FieldLabel>
+                      <FieldLabel>{isSemiMonthlyPayroll ? "Second Cutoff End Date" : "Week 2 Cutoff End Date"}</FieldLabel>
                       <InputField
-                        required
                         value={form.secondCutoffEnd}
                         onChange={(e) => updateField("secondCutoffEnd", formatDayOfMonth(e.target.value))}
                         placeholder={isSemiMonthlyPayroll ? "30" : "14"}
@@ -446,9 +422,8 @@ export default function PayrollSettingsPage() {
 
                   {isWeeklyPayroll ? (
                     <label className="grid gap-2">
-                      <FieldLabel required>Week 3 Cutoff End Date</FieldLabel>
+                      <FieldLabel>Week 3 Cutoff End Date</FieldLabel>
                       <InputField
-                        required
                         value={form.thirdCutoffEnd}
                         onChange={(e) => updateField("thirdCutoffEnd", formatDayOfMonth(e.target.value))}
                         placeholder="21"
@@ -460,9 +435,8 @@ export default function PayrollSettingsPage() {
 
                   {isWeeklyPayroll ? (
                     <label className="grid gap-2">
-                      <FieldLabel required>Week 4 Cutoff End Date</FieldLabel>
+                      <FieldLabel>Week 4 Cutoff End Date</FieldLabel>
                       <InputField
-                        required
                         value={form.fourthCutoffEnd}
                         onChange={(e) => updateField("fourthCutoffEnd", formatDayOfMonth(e.target.value))}
                         placeholder="28"
@@ -483,7 +457,7 @@ export default function PayrollSettingsPage() {
               <Section title="Salary Computation Basis" helper="Control the default rate conversion and payroll deductions for time-related items." accent="emerald">
                 <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
                   <label className="grid gap-2">
-                    <FieldLabel required>Salary Basis</FieldLabel>
+                    <FieldLabel>Salary Basis</FieldLabel>
                     <SelectField value={form.salaryBasis} onChange={(e) => updateField("salaryBasis", e.target.value as PayrollSettings["salaryBasis"])}>
                       <option value="monthly">Monthly Salary</option>
                       <option value="daily">Daily Rate</option>
@@ -494,9 +468,8 @@ export default function PayrollSettingsPage() {
 
 
                   <label className="grid gap-2">
-                    <FieldLabel required>Daily Rate Divisor</FieldLabel>
+                    <FieldLabel>Daily Rate Divisor</FieldLabel>
                     <InputField
-                      required
                       value={form.dailyRateDivisor}
                       onChange={(e) => updateField("dailyRateDivisor", formatPositiveNumber(e.target.value))}
                       placeholder="22"
@@ -506,9 +479,8 @@ export default function PayrollSettingsPage() {
                   </label>
 
                   <label className="grid gap-2">
-                    <FieldLabel required>Hourly Rate Divisor</FieldLabel>
+                    <FieldLabel>Hourly Rate Divisor</FieldLabel>
                     <InputField
-                      required
                       value={form.hourlyRateDivisor}
                       onChange={(e) => updateField("hourlyRateDivisor", formatPositiveNumber(e.target.value, 2))}
                       placeholder="8"

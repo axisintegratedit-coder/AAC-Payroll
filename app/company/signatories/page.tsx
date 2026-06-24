@@ -329,28 +329,6 @@ export default function SignatoriesPage() {
   }
 
   function handleSave() {
-    const requiredFields: Array<[string, string]> = [
-      ["Prepared By Name", form.preparedByName],
-      ["Prepared By Position", form.preparedByPosition],
-      ["Checked By Name", form.checkedByName],
-      ["Checked By Position", form.checkedByPosition],
-      ["Approved By Name", form.approvedByName],
-      ["Approved By Position", form.approvedByPosition],
-      ["Authorized Representative Name", form.authorizedRepName],
-      ["Authorized Representative Position", form.authorizedRepPosition],
-      ["Authorized Representative TIN", form.authorizedRepTin],
-      ["Prepared By Signature", form.preparedBySignature],
-      ["Checked By Signature", form.checkedBySignature],
-      ["Approved By Signature", form.approvedBySignature],
-      ["Authorized Representative Signature", form.authorizedRepSignature],
-    ];
-
-    const missing = requiredFields.find(([, value]) => !value.trim());
-    if (missing) {
-      window.alert(`${missing[0]} is required.`);
-      return;
-    }
-
     const confirmed = window.confirm(
       "Are you sure you want to save these signatory changes? This may affect payroll records, payslips, reports, and tax-related outputs across the system."
     );
@@ -474,28 +452,28 @@ export default function SignatoriesPage() {
               <Section title="Payroll Signatories" helper="Payroll approvals" accent="blue">
                 <div className="grid gap-4 md:grid-cols-2">
                   <label className="grid gap-2">
-                    <FieldLabel required>Prepared By Name</FieldLabel>
-                    <InputField required value={form.preparedByName} onChange={(e) => updateField("preparedByName", e.target.value)} placeholder="Name" />
+                    <FieldLabel>Prepared By Name</FieldLabel>
+                    <InputField value={form.preparedByName} onChange={(e) => updateField("preparedByName", e.target.value)} placeholder="Name" />
                   </label>
                   <label className="grid gap-2">
-                    <FieldLabel required>Prepared By Position</FieldLabel>
-                    <InputField required value={form.preparedByPosition} onChange={(e) => updateField("preparedByPosition", e.target.value)} placeholder="Position" />
+                    <FieldLabel>Prepared By Position</FieldLabel>
+                    <InputField value={form.preparedByPosition} onChange={(e) => updateField("preparedByPosition", e.target.value)} placeholder="Position" />
                   </label>
                   <label className="grid gap-2">
-                    <FieldLabel required>Checked By Name</FieldLabel>
-                    <InputField required value={form.checkedByName} onChange={(e) => updateField("checkedByName", e.target.value)} placeholder="Name" />
+                    <FieldLabel>Checked By Name</FieldLabel>
+                    <InputField value={form.checkedByName} onChange={(e) => updateField("checkedByName", e.target.value)} placeholder="Name" />
                   </label>
                   <label className="grid gap-2">
-                    <FieldLabel required>Checked By Position</FieldLabel>
-                    <InputField required value={form.checkedByPosition} onChange={(e) => updateField("checkedByPosition", e.target.value)} placeholder="Position" />
+                    <FieldLabel>Checked By Position</FieldLabel>
+                    <InputField value={form.checkedByPosition} onChange={(e) => updateField("checkedByPosition", e.target.value)} placeholder="Position" />
                   </label>
                   <label className="grid gap-2">
-                    <FieldLabel required>Approved By Name</FieldLabel>
-                    <InputField required value={form.approvedByName} onChange={(e) => updateField("approvedByName", e.target.value)} placeholder="Name" />
+                    <FieldLabel>Approved By Name</FieldLabel>
+                    <InputField value={form.approvedByName} onChange={(e) => updateField("approvedByName", e.target.value)} placeholder="Name" />
                   </label>
                   <label className="grid gap-2">
-                    <FieldLabel required>Approved By Position</FieldLabel>
-                    <InputField required value={form.approvedByPosition} onChange={(e) => updateField("approvedByPosition", e.target.value)} placeholder="Position" />
+                    <FieldLabel>Approved By Position</FieldLabel>
+                    <InputField value={form.approvedByPosition} onChange={(e) => updateField("approvedByPosition", e.target.value)} placeholder="Position" />
                   </label>
                 </div>
               </Section>
@@ -503,16 +481,16 @@ export default function SignatoriesPage() {
               <Section title="BIR / Employer Representative" helper="Authorized representative" accent="amber">
                 <div className="grid gap-4 md:grid-cols-3">
                   <label className="grid gap-2">
-                    <FieldLabel required>Authorized Representative Name</FieldLabel>
-                    <InputField required value={form.authorizedRepName} onChange={(e) => updateField("authorizedRepName", e.target.value)} placeholder="Name" />
+                    <FieldLabel>Authorized Representative Name</FieldLabel>
+                    <InputField value={form.authorizedRepName} onChange={(e) => updateField("authorizedRepName", e.target.value)} placeholder="Name" />
                   </label>
                   <label className="grid gap-2">
-                    <FieldLabel required>Authorized Representative Position</FieldLabel>
-                    <InputField required value={form.authorizedRepPosition} onChange={(e) => updateField("authorizedRepPosition", e.target.value)} placeholder="Position" />
+                    <FieldLabel>Authorized Representative Position</FieldLabel>
+                    <InputField value={form.authorizedRepPosition} onChange={(e) => updateField("authorizedRepPosition", e.target.value)} placeholder="Position" />
                   </label>
                   <label className="grid gap-2">
-                    <FieldLabel required>Authorized Representative TIN</FieldLabel>
-                    <InputField required value={form.authorizedRepTin} onChange={(e) => updateField("authorizedRepTin", formatTin(e.target.value))} placeholder="000-000-000-00000" maxLength={17} />
+                    <FieldLabel>Authorized Representative TIN</FieldLabel>
+                    <InputField value={form.authorizedRepTin} onChange={(e) => updateField("authorizedRepTin", formatTin(e.target.value))} placeholder="000-000-000-00000" maxLength={17} />
                   </label>
                 </div>
               </Section>
@@ -520,22 +498,22 @@ export default function SignatoriesPage() {
               <Section title="Signature Uploads" helper="PNG or JPG" accent="purple">
                 <div className="grid gap-4 md:grid-cols-2">
                   <label className="grid gap-2">
-                    <FieldLabel required>Prepared By Signature</FieldLabel>
+                    <FieldLabel>Prepared By Signature</FieldLabel>
                     <InputField type="file" accept="image/*" onChange={(e) => handleSignatureUpload("preparedBySignature", e)} />
                     <HelperText>Use a clean image on a white or transparent background.</HelperText>
                   </label>
                   <label className="grid gap-2">
-                    <FieldLabel required>Checked By Signature</FieldLabel>
+                    <FieldLabel>Checked By Signature</FieldLabel>
                     <InputField type="file" accept="image/*" onChange={(e) => handleSignatureUpload("checkedBySignature", e)} />
                     <HelperText>Use a clean image on a white or transparent background.</HelperText>
                   </label>
                   <label className="grid gap-2">
-                    <FieldLabel required>Approved By Signature</FieldLabel>
+                    <FieldLabel>Approved By Signature</FieldLabel>
                     <InputField type="file" accept="image/*" onChange={(e) => handleSignatureUpload("approvedBySignature", e)} />
                     <HelperText>Use a clean image on a white or transparent background.</HelperText>
                   </label>
                   <label className="grid gap-2">
-                    <FieldLabel required>Authorized Representative Signature</FieldLabel>
+                    <FieldLabel>Authorized Representative Signature</FieldLabel>
                     <InputField type="file" accept="image/*" onChange={(e) => handleSignatureUpload("authorizedRepSignature", e)} />
                     <HelperText>Use a clean image on a white or transparent background.</HelperText>
                   </label>
