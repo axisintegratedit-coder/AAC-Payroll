@@ -1,0 +1,41 @@
+@import "tailwindcss";
+
+:root {
+  --background: #ffffff;
+  --foreground: #171717;
+  --axis-navy: #0b2742;
+  --axis-blue: #1a3f6f;
+  --axis-vivid: #2563eb;
+  --axis-cyan: #3abeff;
+  --axis-border: rgba(0, 0, 0, 0.1);
+  --hero-bg: linear-gradient(135deg, #071a2f 0%, #0b2742 40%, #1a3f6f 75%, #2563eb 100%);
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --font-sans: var(--font-geist-sans);
+  --font-mono: var(--font-geist-mono);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --background: #0a0a0a;
+    --foreground: #ededed;
+  }
+}
+
+body {
+  background: var(--background);
+  color: var(--foreground);
+  font-family: Arial, Helvetica, sans-serif;
+}
+
+/* Page root background — defaults to slate-50; becomes transparent when a
+   background photo is active so the body photo shows through. */
+.pg-bg {
+  background-color: rgb(248 250 252);
+}
+html[data-page-bg] .pg-bg {
+  background-color: transparent;
+}

@@ -1,0 +1,61 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // authorizedUsers — read by login flow, written by admin out-of-band
+    match /authorizedUsers/{docId} {
+      allow read: if request.auth != null;
+      allow write: if false; // managed via Firebase Console / Admin SDK
+    }
+
+    // Organization-scoped data
+    match /organizations/{organizationId}/{document=**} {
+
+      // Temporary single-organization mode until the app has an organization picker.
+      function isDefaultOrganization() {
+        return organizationId == "default-org";
+      }
+
+      // Helper: is the caller an authenticated admin?
+      function isAdmin() {
+        return request.auth != null &&
+          isDefaultOrganization() &&
+          (
+            (
+              exists(/databases/$(database)/documents/authorizedUsers/$(request.auth.uid)) &&
+              get(/databases/$(database)/documents/authorizedUsers/$(request.auth.uid)).data.role == "admin"
+            ) ||
+            (
+              request.auth.token.email != null &&
+              exists(/databases/$(database)/documents/authorizedUsers/$(request.auth.token.email)) &&
+              get(/databases/$(database)/documents/authorizedUsers/$(request.auth.token.email)).data.role == "admin"
+            )
+          );
+      }
+
+      // Helper: is the caller a client user linked to this organization?
+      function isClient() {
+        return request.auth != null &&
+          isDefaultOrganization() &&
+          (
+            (
+              exists(/databases/$(database)/documents/authorizedUsers/$(request.auth.uid)) &&
+              get(/databases/$(database)/documents/authorizedUsers/$(request.auth.uid)).data.role == "client"
+            ) ||
+            (
+              request.auth.token.email != null &&
+              exists(/databases/$(database)/documents/authorizedUsers/$(request.auth.token.email)) &&
+              get(/databases/$(database)/documents/authorizedUsers/$(request.auth.token.email)).data.role == "client"
+            )
+          );
+      }
+
+      // Admin can read and write everything under the organization
+      allow read, write: if isAdmin();
+
+      // Client can only read (no writes)
+      allow read: if isClient();
+      allow write: if false;
+    }
+  }
+}
