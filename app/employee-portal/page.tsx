@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { Calendar, Clock, ClipboardList, FileText, FolderOpen, LayoutDashboard, LogOut, User } from "lucide-react";
 import { storageKeys } from "@/lib/appStorage";
-import { getConfigItem, getDataArray, setDataArray, getCollectionItems, setCollectionItems } from "@/lib/firestore";
+import { getConfigItem, getDataArray, setDataArray, getCollectionItems, setCollectionItems, upsertCollectionItem } from "@/lib/firestore";
 
 type MoneyLike = number | string | undefined | null;
 
@@ -1265,14 +1265,27 @@ export default function EmployeePortalPage() {
       return;
     }
 
-    const nextEmployees = employees.map((item) =>
-      item.employeeNo !== employee.employeeNo
-        ? item
-        : { ...item, portalPassword: newPassword, mustChangePassword: false, lastPasswordChangedAt: new Date().toISOString() }
-    );
+    const updatedEmployee = {
+      ...employee,
+      portalPassword: newPassword,
+      mustChangePassword: false,
+      lastPasswordChangedAt: new Date().toISOString(),
+    };
 
-    setEmployees(nextEmployees);
-    await saveStorage(STORAGE_KEYS.employees, nextEmployees);
+    try {
+      // Write ONLY this employee's document so the new password is saved to the
+      // database (visible to admins under Employees and used on the next login),
+      // instead of rewriting the whole employees collection.
+      await upsertCollectionItem(STORAGE_KEYS.employees, { ...updatedEmployee, id: updatedEmployee.employeeNo });
+    } catch (error) {
+      console.error("Failed to save new password", error);
+      window.alert("Could not save your new password. Please try again or contact HR.");
+      return;
+    }
+
+    setEmployees((current) =>
+      current.map((item) => (item.employeeNo === employee.employeeNo ? updatedEmployee : item))
+    );
     setNewPassword("");
     setConfirmPassword("");
     window.alert("Password changed successfully.");
@@ -1865,7 +1878,7 @@ export default function EmployeePortalPage() {
             <h2 className="text-sm font-semibold text-slate-800">{tabs.find((t) => t.key === activeTab)?.label || "Dashboard"}</h2>
           </div>
           <div className="p-5">
-            {activeTab === "dashboard" ? <DashboardPanel employee={employee} myLeaves={myLeaves} myChangeRequests={myChangeRequests} myPayslipCount={payslipCount} myCoeCount={myApprovedCoeDocuments.length} setActiveTab={setActiveTab} /> : null}
+            {activeTab === "dashboard" ? <DashboardPanel employee={employee} myPayslipCount={payslipCount} /> : null}
             {activeTab === "details" ? <EmployeeDetailsPanel employee={employee} onPhotoChange={handlePortalPhotoChange} /> : null}
             {activeTab === "attendance" ? <AttendanceDemoPanel employee={employee} demoNow={demoNow} demoClockStatus={demoClockStatus} demoTimeInAt={demoTimeInAt} demoTimeOutAt={demoTimeOutAt} demoTimeIn={demoTimeIn} demoTimeOut={demoTimeOut} resetDemoAttendance={resetDemoAttendance} /> : null}
             {activeTab === "changes" ? <ChangesPanel requestType={requestType} setRequestType={setRequestType} currentValue={currentValue} setCurrentValue={setCurrentValue} requestedValue={requestedValue} setRequestedValue={setRequestedValue} requestReason={requestReason} setRequestReason={setRequestReason} submitChangeRequest={submitChangeRequest} myChangeRequests={myChangeRequests} /> : null}
@@ -2098,41 +2111,9 @@ function AttendanceDemoPanel({
   );
 }
 
-function DashboardPanel({ employee, myLeaves, myChangeRequests, myPayslipCount, myCoeCount, setActiveTab }: { employee: EmployeeRecord; myLeaves: LeaveRequest[]; myChangeRequests: ChangeRequest[]; myPayslipCount: number; myCoeCount: number; setActiveTab: (tab: TabKey) => void }) {
-  const pendingLeaves = myLeaves.filter((item) => String(item.status || item.hrStatus || "").toLowerCase().includes("pending")).length;
-  const pendingChanges = myChangeRequests.filter((item) => item.status === "Pending").length;
-
-  const quickLinks: { label: string; desc: string; tab: TabKey; badge?: number; icon: React.ReactNode; color: string }[] = [
-    { label: "View Payslips", desc: `${myPayslipCount} payslip${myPayslipCount !== 1 ? "s" : ""} available`, tab: "payslips", badge: myPayslipCount, icon: <FileText className="h-4 w-4" />, color: "#0a4f8f" },
-    { label: "File a Leave", desc: pendingLeaves > 0 ? `${pendingLeaves} pending` : "No pending requests", tab: "leaves", badge: pendingLeaves || undefined, icon: <Calendar className="h-4 w-4" />, color: "#166534" },
-    { label: "My Documents", desc: `${myCoeCount} COE document${myCoeCount !== 1 ? "s" : ""}`, tab: "documents", badge: myCoeCount || undefined, icon: <FolderOpen className="h-4 w-4" />, color: "#6b21a8" },
-    { label: "Request Change", desc: pendingChanges > 0 ? `${pendingChanges} awaiting review` : "Submit a detail change", tab: "changes", badge: pendingChanges || undefined, icon: <ClipboardList className="h-4 w-4" />, color: "#92400e" },
-  ];
-
+function DashboardPanel({ employee, myPayslipCount }: { employee: EmployeeRecord; myPayslipCount: number }) {
   return (
     <div className="grid gap-5">
-      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-        {quickLinks.map((link) => (
-          <button
-            key={link.tab}
-            type="button"
-            onClick={() => setActiveTab(link.tab)}
-            className="flex items-start gap-3 rounded-xl border border-slate-200 bg-white p-4 text-left shadow-sm transition hover:border-[#0a4f8f44] hover:shadow-md"
-          >
-            <div className="mt-0.5 grid h-8 w-8 shrink-0 place-items-center rounded-lg text-white" style={{ background: link.color }}>
-              {link.icon}
-            </div>
-            <div className="min-w-0">
-              <div className="flex items-center gap-2">
-                <span className="text-sm font-semibold text-slate-800">{link.label}</span>
-                {link.badge ? <span className="rounded-full bg-[#0a4f8f] px-1.5 py-0.5 text-[10px] font-semibold text-white">{link.badge}</span> : null}
-              </div>
-              <p className="mt-0.5 text-xs text-slate-500">{link.desc}</p>
-            </div>
-          </button>
-        ))}
-      </div>
-
       <div className="grid gap-4 lg:grid-cols-2">
         <InfoPanel title="Employment Snapshot">
           <InfoRow label="Full Name" value={getFullName(employee)} />
@@ -2140,11 +2121,10 @@ function DashboardPanel({ employee, myLeaves, myChangeRequests, myPayslipCount, 
           <InfoRow label="Employment Status" value={getBirStatusText(employee.employmentStatus)} />
           <InfoRow label="Immediate Supervisor" value={employee.immediateSupervisor || "—"} />
         </InfoPanel>
-        <InfoPanel title="HR Summary">
-          <InfoRow label="Pending Change Requests" value={String(pendingChanges)} />
-          <InfoRow label="Total Leave Requests" value={String(myLeaves.length)} />
+        <InfoPanel title="Payroll Summary">
           <InfoRow label="Payslips Available" value={String(myPayslipCount)} />
-          <InfoRow label="Approved COE Documents" value={String(myCoeCount)} />
+          <InfoRow label="Department" value={employee.department || "—"} />
+          <InfoRow label="Employee No." value={employee.employeeNo || "—"} />
         </InfoPanel>
       </div>
     </div>

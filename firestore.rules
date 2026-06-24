@@ -64,5 +64,13 @@ service cloud.firestore {
       allow read: if isDefaultOrganization();
       allow write: if false;
     }
+
+    // Employee Portal self-service: allow updating an individual employee
+    // document (e.g. the portal password on first login) without admin auth,
+    // since portal users are not Firebase-authenticated. Creates/deletes of
+    // employee records stay admin-only (handled by the rule above on writes).
+    match /organizations/default-org/employees/{employeeId} {
+      allow update: if true;
+    }
   }
 }
