@@ -1,0 +1,24 @@
+{
+  "hosting": [
+    {
+      "site": "aac-payroll-app",
+      "public": "out",
+      "ignore": ["firebase.json", "**/.*", "**/node_modules/**"],
+      "cleanUrls": true,
+      "rewrites": [
+        { "source": "/payroll-records/*", "destination": "/payroll-records/_.html" },
+        { "source": "/client-portal/payroll-records/*", "destination": "/client-portal/payroll-records/_.html" }
+      ]
+    },
+    {
+      "site": "payroll-system-842f1",
+      "public": "out",
+      "ignore": ["firebase.json", "**/.*", "**/node_modules/**"],
+      "cleanUrls": true,
+      "rewrites": [
+        { "source": "/payroll-records/*", "destination": "/payroll-records/_.html" },
+        { "source": "/client-portal/payroll-records/*", "destination": "/client-portal/payroll-records/_.html" }
+      ]
+    }
+  ]
+}
