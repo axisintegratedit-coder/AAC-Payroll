@@ -1366,15 +1366,46 @@ function AddEmployeePageInner() {
       return;
     }
 
-    const MAX_PHOTO_BYTES = 50 * 1024 * 1024; // 50 MB
+    const MAX_PHOTO_BYTES = 50 * 1024 * 1024; // 50 MB upload cap
     if (file.size > MAX_PHOTO_BYTES) {
       showFormWarning("Employee photo must be 50 MB or smaller. Please choose a smaller image.");
       return;
     }
 
+    // Firestore documents are limited to ~1 MB, and the photo is stored inside
+    // the employee document as a data URL. Downscale/re-encode the image in the
+    // browser so it stays small enough to save regardless of the original size.
     const reader = new FileReader();
     reader.onloadend = () => {
-      setEmployeePhotoDataUrl(String(reader.result || ""));
+      const originalDataUrl = String(reader.result || "");
+      const img = new window.Image();
+      img.onload = () => {
+        const MAX_DIMENSION = 800; // longest side in pixels
+        let { width, height } = img;
+        if (width > height && width > MAX_DIMENSION) {
+          height = Math.round((height * MAX_DIMENSION) / width);
+          width = MAX_DIMENSION;
+        } else if (height > MAX_DIMENSION) {
+          width = Math.round((width * MAX_DIMENSION) / height);
+          height = MAX_DIMENSION;
+        }
+
+        const canvas = document.createElement("canvas");
+        canvas.width = width;
+        canvas.height = height;
+        const ctx = canvas.getContext("2d");
+        if (!ctx) {
+          setEmployeePhotoDataUrl(originalDataUrl);
+          return;
+        }
+        ctx.drawImage(img, 0, 0, width, height);
+        const compressed = canvas.toDataURL("image/jpeg", 0.8);
+        setEmployeePhotoDataUrl(compressed);
+      };
+      img.onerror = () => {
+        showFormWarning("That image could not be processed. Please try a different file.");
+      };
+      img.src = originalDataUrl;
     };
     reader.readAsDataURL(file);
   }
