@@ -1752,11 +1752,7 @@ export default function EmployeePortalPage() {
   const tabs: { key: TabKey; label: string }[] = [
     { key: "dashboard", label: "Dashboard" },
     { key: "details", label: "My Details" },
-    { key: "attendance", label: "Time Clock" },
-    { key: "changes", label: "Change Requests" },
-    { key: "leaves", label: `Leaves${myLeaveMonetizationRequests.some((request) => request.status === "Assigned to Payroll" || request.status === "Posted") ? " •" : ""}` },
     { key: "payslips", label: `Payslips${myPayslipDocuments.length ? ` (${myPayslipDocuments.length})` : ""}` },
-    { key: "documents", label: `Documents${myApprovedCoeDocuments.length ? ` (${myApprovedCoeDocuments.length})` : ""}` },
   ];
 
   if (!employee) {
@@ -1774,11 +1770,7 @@ export default function EmployeePortalPage() {
   const portalNavTiles: { key: TabKey; label: string; hint: string; icon: React.ReactNode }[] = [
     { key: "dashboard", label: "Dashboard", hint: "Overview", icon: <LayoutDashboard className="h-5 w-5" /> },
     { key: "details", label: "My Profile", hint: "Personal info", icon: <User className="h-5 w-5" /> },
-    { key: "attendance", label: "Time Clock", hint: "Attendance", icon: <Clock className="h-5 w-5" /> },
-    { key: "leaves", label: "Leave", hint: pendingLeaveCount > 0 ? `${pendingLeaveCount} pending` : "File a leave", icon: <Calendar className="h-5 w-5" /> },
     { key: "payslips", label: "Payslips", hint: payslipCount > 0 ? `${payslipCount} slips` : "No slips yet", icon: <FileText className="h-5 w-5" /> },
-    { key: "documents", label: "Documents", hint: myApprovedCoeDocuments.length > 0 ? `${myApprovedCoeDocuments.length} files` : "COE & policies", icon: <FolderOpen className="h-5 w-5" /> },
-    { key: "changes", label: "Requests", hint: pendingChangeCount > 0 ? `${pendingChangeCount} pending` : "Request changes", icon: <ClipboardList className="h-5 w-5" /> },
   ];
 
   return (
