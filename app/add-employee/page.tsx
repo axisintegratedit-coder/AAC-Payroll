@@ -2853,7 +2853,16 @@ function applyBatchAllowanceAmount(nextAmount: string) {
       return;
     }
 
-    const savedEmployeesForDuplicateCheck = await loadSavedEmployees();
+    let savedEmployeesForDuplicateCheck: EmployeeRecord[];
+    try {
+      savedEmployeesForDuplicateCheck = await loadSavedEmployees();
+    } catch (error) {
+      console.error("Failed to load existing employees before saving", error);
+      window.alert(
+        "Could not reach the database to save this employee. Please check your connection and that your account has access, then try again."
+      );
+      return;
+    }
     const duplicateEmployeeFields = findDuplicateEmployeeFields(
       savedEmployeesForDuplicateCheck,
       {
