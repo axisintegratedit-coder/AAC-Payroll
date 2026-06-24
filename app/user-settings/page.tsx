@@ -2,9 +2,9 @@
 
 /* eslint-disable react-hooks/set-state-in-effect */
 
-import { LogOut, Pencil, Save, ShieldCheck, UserCog, X } from "lucide-react";
+import { KeyRound, LogOut, Pencil, Save, ShieldCheck, UserCog, X } from "lucide-react";
 import { useEffect, useState } from "react";
-import { signOut } from "firebase/auth";
+import { EmailAuthProvider, reauthenticateWithCredential, signOut, updatePassword } from "firebase/auth";
 import { useRouter } from "next/navigation";
 import { auth } from "@/lib/firebase";
 import { clearCurrentAdminUser, getCurrentAdminUser, type AdminRole, type AdminUser } from "@/lib/adminAuth";
@@ -22,6 +22,10 @@ export default function UserSettingsPage() {
   const [userForm, setUserForm] = useState<AdminUser | null>(null);
   const [isEditingUser, setIsEditingUser] = useState(false);
   const [theme, setTheme] = useState<AppTheme>(DEFAULT_APP_THEME);
+  const [currentPassword, setCurrentPassword] = useState("");
+  const [newPassword, setNewPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
+  const [isChangingPassword, setIsChangingPassword] = useState(false);
   useEffect(() => {
     const user = getCurrentAdminUser();
     setCurrentUser(user);
@@ -113,6 +117,69 @@ export default function UserSettingsPage() {
     setIsEditingUser(false);
     logAudit({ action: "SAVED", entityType: "Settings", entityId: nextUser.uid || "admin-user", entityName: nextUser.name || nextUser.email || "Admin User", details: "Signed-in user profile updated" });
     window.alert("Signed-in user details updated.");
+  }
+
+  async function handleChangePassword() {
+    const user = auth?.currentUser;
+    if (!user || !user.email) {
+      window.alert("No signed-in account found. Please log in again.");
+      return;
+    }
+
+    if (!currentPassword) {
+      window.alert("Please enter your current password.");
+      return;
+    }
+
+    if (newPassword.length < 6) {
+      window.alert("New password must be at least 6 characters long.");
+      return;
+    }
+
+    if (newPassword !== confirmPassword) {
+      window.alert("New password and confirmation do not match.");
+      return;
+    }
+
+    if (newPassword === currentPassword) {
+      window.alert("New password must be different from your current password.");
+      return;
+    }
+
+    setIsChangingPassword(true);
+    try {
+      // Firebase requires a recent login to change the password, so re-authenticate first.
+      const credential = EmailAuthProvider.credential(user.email, currentPassword);
+      await reauthenticateWithCredential(user, credential);
+      await updatePassword(user, newPassword);
+
+      logAudit({
+        action: "EDITED",
+        entityType: "Settings",
+        entityId: user.uid,
+        entityName: currentUser?.name || user.email,
+        details: "Account password changed",
+      });
+
+      setCurrentPassword("");
+      setNewPassword("");
+      setConfirmPassword("");
+      window.alert("Password changed successfully.");
+    } catch (error) {
+      console.error(error);
+      const code = (error as { code?: string })?.code || "";
+      if (code === "auth/wrong-password" || code === "auth/invalid-credential") {
+        window.alert("Your current password is incorrect.");
+      } else if (code === "auth/weak-password") {
+        window.alert("New password is too weak. Use at least 6 characters.");
+      } else if (code === "auth/too-many-requests") {
+        window.alert("Too many attempts. Please wait a moment and try again.");
+      } else {
+        window.alert("Could not change password. Please try again.");
+      }
+    } finally {
+      setIsChangingPassword(false);
+    }
   }
 
   return (
@@ -439,6 +506,62 @@ export default function UserSettingsPage() {
               Logout
             </button>
           </section>
+
+        <section className="axis-user-settings-card">
+          <div style={sectionHeaderStyle}>
+            <div>
+              <h2 style={sectionTitleStyle}>Change Password</h2>
+              <p style={sectionSubtitleStyle}>Update the password for your signed-in account.</p>
+            </div>
+            <KeyRound className="axis-user-settings-card-icon" size={24} aria-hidden="true" />
+          </div>
+
+          <div style={{ display: "grid", gap: 14, maxWidth: 480 }}>
+            <label>
+              <div style={inputLabelStyle}>Current Password</div>
+              <input
+                type="password"
+                value={currentPassword}
+                onChange={(event) => setCurrentPassword(event.target.value)}
+                placeholder="Enter current password"
+                autoComplete="current-password"
+                style={inputStyle}
+              />
+            </label>
+            <label>
+              <div style={inputLabelStyle}>New Password</div>
+              <input
+                type="password"
+                value={newPassword}
+                onChange={(event) => setNewPassword(event.target.value)}
+                placeholder="At least 6 characters"
+                autoComplete="new-password"
+                style={inputStyle}
+              />
+            </label>
+            <label>
+              <div style={inputLabelStyle}>Confirm New Password</div>
+              <input
+                type="password"
+                value={confirmPassword}
+                onChange={(event) => setConfirmPassword(event.target.value)}
+                placeholder="Re-enter new password"
+                autoComplete="new-password"
+                style={inputStyle}
+              />
+            </label>
+
+            <button
+              type="button"
+              onClick={handleChangePassword}
+              disabled={isChangingPassword}
+              style={{ ...primaryButtonStyle, opacity: isChangingPassword ? 0.6 : 1, cursor: isChangingPassword ? "not-allowed" : "pointer" }}
+            >
+              <KeyRound size={15} aria-hidden="true" />
+              {isChangingPassword ? "Updating…" : "Update Password"}
+            </button>
+          </div>
+        </section>
 
       </section>
     </main>
