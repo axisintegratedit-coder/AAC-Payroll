@@ -2317,11 +2317,6 @@ function applyBatchAllowanceAmount(nextAmount: string) {
   async function handleSaveImportedRows() {
     setFormWarningMessage("");
 
-    if (!company.trim()) {
-      showFormWarning("Please save the Company Profile first so imported employees can use the saved company name.");
-      return;
-    }
-
     if (batchImportRows.length === 0) {
       showFormWarning(isExistingEmployeeBatchMode ? "Please load existing employees first." : "Please upload a CSV file first.");
       return;
@@ -2513,12 +2508,6 @@ function applyBatchAllowanceAmount(nextAmount: string) {
   async function handleBatchImport(event: React.ChangeEvent<HTMLInputElement>) {
     const file = event.target.files?.[0];
     if (!file) return;
-
-    if (!company.trim()) {
-      showFormWarning("Please save the Company Profile first so imported employees can use the saved company name.");
-      event.target.value = "";
-      return;
-    }
 
     setIsImportingBatch(true);
     setIsExistingEmployeeBatchMode(false);
@@ -2825,11 +2814,6 @@ function applyBatchAllowanceAmount(nextAmount: string) {
 
     if (!firstName.trim()) {
       showFormWarning("First Name is required.");
-      return;
-    }
-
-    if (!company.trim()) {
-      showFormWarning("Please save the Company Profile first so the company name can be used here.");
       return;
     }
 
