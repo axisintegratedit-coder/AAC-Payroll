@@ -2,7 +2,7 @@ export type {
   AuditAction,
   AuditEntry,
 } from "./firestore";
-import { auth } from "./firebase";
+import { getCurrentUser } from "./authClient";
 
 export {
   logAudit,
@@ -34,7 +34,7 @@ export function auditActionLabel(action: string): string {
 
 export function resolveAuditUser(performedById: string): string {
   if (performedById === "__client_portal__") return "Client Portal User";
-  const user = auth.currentUser;
+  const user = getCurrentUser();
   if (user?.uid === performedById) return user.displayName || user.email || performedById;
   return performedById;
 }

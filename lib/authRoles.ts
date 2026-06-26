@@ -1,6 +1,9 @@
-import { onAuthStateChanged, type User } from "firebase/auth";
-import { collection, doc, getDoc, getDocs, query, where } from "firebase/firestore";
-import { auth, db, firebaseConfigured } from "./firebase";
+import {
+  type AppUser,
+  getCurrentUser,
+  waitForUser,
+  getAuthorizedUserByEmail,
+} from "./authClient";
 
 export type AuthorizedUserRole = "admin" | "client";
 
@@ -12,41 +15,23 @@ export type AuthorizedUserProfile = {
   status?: string;
 };
 
-export function waitForAuthUser(): Promise<User | null> {
-  if (!firebaseConfigured || !auth) return Promise.resolve(null);
-
-  if (auth.currentUser) return Promise.resolve(auth.currentUser);
-
-  return new Promise((resolve) => {
-    const unsubscribe = onAuthStateChanged(auth, (user) => {
-      unsubscribe();
-      resolve(user);
-    });
-  });
+export function waitForAuthUser(): Promise<AppUser | null> {
+  return waitForUser();
 }
 
-export async function getAuthorizedUserProfile(user = auth.currentUser): Promise<AuthorizedUserProfile | null> {
+export async function getAuthorizedUserProfile(
+  user: AppUser | null = getCurrentUser()
+): Promise<AuthorizedUserProfile | null> {
   if (!user?.email) return null;
 
-  if (!firebaseConfigured || !db) return null;
-
-  const byUid = await getDoc(doc(db, "authorizedUsers", user.uid)).catch(() => null);
-  const snapData = byUid?.exists() ? byUid.data() : null;
-
-  const data = snapData ?? await (async () => {
-    const byEmail = query(collection(db, "authorizedUsers"), where("email", "==", user.email));
-    const snaps = await getDocs(byEmail);
-    return snaps.empty ? null : snaps.docs[0].data();
-  })();
-
+  const data = await getAuthorizedUserByEmail(user.email);
   if (!data || (data.role !== "admin" && data.role !== "client")) return null;
 
   return {
     uid: user.uid,
     email: user.email,
     name: String(data.name || user.displayName || user.email),
-    role: data.role,
+    role: data.role as AuthorizedUserRole,
     status: String(data.status || "Approved"),
   };
 }
-

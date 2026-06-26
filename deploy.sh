@@ -21,9 +21,9 @@ deploy_target() {
   case "$target" in
     aac)
       envfile=".env.aac"
-      project="aac-payroll-538f1"
-      site="aac-payroll-app"
-      account="axisintegrated.it@gmail.com"
+      project="aac-payroll-65032"
+      site="aac-payroll-65032"
+      account="louiserobertsegura0630@gmail.com"
       ;;
     original)
       envfile=".env.original"

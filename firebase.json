@@ -4,7 +4,7 @@
   },
   "hosting": [
     {
-      "site": "aac-payroll-app",
+      "site": "aac-payroll-65032",
       "public": "out",
       "ignore": ["firebase.json", "**/.*", "**/node_modules/**"],
       "cleanUrls": true,

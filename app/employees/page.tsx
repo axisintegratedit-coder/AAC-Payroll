@@ -23,7 +23,7 @@ import { getConfigItem, getCollectionItems, setCollectionItems } from "@/lib/fir
 import { storageKeys } from "@/lib/appStorage";
 import { applyAppTheme, DEFAULT_APP_THEME, normalizeTheme, type AppTheme } from "@/lib/appTheme";
 import { logAudit, getAuditsByEntity, formatAuditTimestamp, auditActionLabel, type AuditEntry } from "@/lib/auditTrail";
-import { auth } from "@/lib/firebase";
+import { getCurrentUser } from "@/lib/authClient";
 import {
   appendSalaryHistoryEntry,
   getCurrentBaseSalary,
@@ -362,7 +362,7 @@ function diffEmployee(before: Employee, after: Employee): string {
 }
 
 function getSalaryChangedBy() {
-  const user = auth.currentUser;
+  const user = getCurrentUser();
   return user?.displayName || user?.email || user?.uid || "unknown";
 }
 

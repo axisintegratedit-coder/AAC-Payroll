@@ -3,9 +3,8 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Eye, EyeOff, KeyRound, Mail, Pencil, Save, User, X } from "lucide-react";
-import { signInWithEmailAndPassword, updatePassword } from "firebase/auth";
-import { auth } from "@/lib/firebase";
 import {
+  changeClientPortalPassword,
   getClientPortalFirestoreProfile,
   getClientPortalSessionAsync,
   sendClientPortalPasswordReset,
@@ -128,37 +127,29 @@ export default function ClientPortalSettingsPage() {
     setPwStatus("loading");
 
     try {
-      const user = auth.currentUser;
-      if (!user || !user.email) {
+      const result = await changeClientPortalPassword(currentPw, newPw);
+      if (!result.success) {
         setPwStatus("error");
-        setPwError("Session expired. Please log out and log in again.");
+        const msg = result.error || "";
+        if (/wrong-password|invalid-credential|incorrect/i.test(msg)) {
+          setPwError("Current password is incorrect.");
+        } else if (/too-many-requests/i.test(msg)) {
+          setPwError("Too many attempts. Please try again later.");
+        } else if (/session expired/i.test(msg)) {
+          setPwError("Session expired. Please log out and log in again.");
+        } else {
+          setPwError(msg || "Could not change password. Please try again.");
+        }
         return;
       }
-
-      // Fresh sign-in with the current password verifies the credential
-      // and returns a freshly authenticated user for updatePassword().
-      const userCredential = await signInWithEmailAndPassword(
-        auth,
-        user.email,
-        currentPw
-      );
-      await updatePassword(userCredential.user, newPw);
-
       setPwStatus("success");
       setCurrentPw("");
       setNewPw("");
       setConfirmPw("");
     } catch (err: unknown) {
-      const code = (err as { code?: string }).code ?? "";
       const message = (err as { message?: string }).message ?? "";
       setPwStatus("error");
-      if (code === "auth/wrong-password" || code === "auth/invalid-credential") {
-        setPwError("Current password is incorrect.");
-      } else if (code === "auth/too-many-requests") {
-        setPwError("Too many attempts. Please try again later.");
-      } else {
-        setPwError(`Error: ${code} — ${message}`);
-      }
+      setPwError(`Error: ${message}`);
     }
   }
 

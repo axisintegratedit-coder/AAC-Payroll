@@ -43,3 +43,6 @@ next-env.d.ts
 
 # Firebase deploy cache
 .firebase/
+
+# migration secrets
+aac-service-account.json

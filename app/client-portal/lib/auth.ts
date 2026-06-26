@@ -1,15 +1,13 @@
 import {
-  signInWithEmailAndPassword,
-  signOut as firebaseSignOut,
-  sendPasswordResetEmail as firebaseSendPasswordReset,
-  onAuthStateChanged as firebaseOnAuthStateChanged,
-  reauthenticateWithCredential,
-  updatePassword,
-  EmailAuthProvider,
-  type User,
-} from "firebase/auth";
-import { collection, getDocs, query, where } from "firebase/firestore";
-import { auth, db, ensureSessionAuthPersistence } from "@/lib/firebase";
+  type AppUser,
+  signInWithEmail,
+  signOutUser,
+  onAuthChange,
+  sendPasswordReset,
+  changePassword,
+  getAuthorizedUserByEmail,
+  ensureSessionPersistence,
+} from "@/lib/authClient";
 import { DEFAULT_ORGANIZATION_ID } from "@/lib/firestore";
 import { getAuthorizedUserProfile, waitForAuthUser } from "@/lib/authRoles";
 
@@ -35,7 +33,7 @@ export type FirestoreProfile = {
 };
 
 // Synchronous fast-check used in page useEffects for immediate redirect.
-// This flag is only ever written after Firebase + Firestore verify role === "client".
+// Only ever written after the backend + authorized-user lookup verify role === "client".
 export function getClientPortalSession(): ClientPortalSession | null {
   return cachedClientPortalSession;
 }
@@ -71,50 +69,37 @@ export function ensureBypassAdminUser(name = "Client Viewer"): void {
   void name;
 }
 
-export async function loginClientPortal(
-  email: string,
-  password: string
-): Promise<LoginResult> {
+export async function loginClientPortal(email: string, password: string): Promise<LoginResult> {
   try {
-    await ensureSessionAuthPersistence();
-    const credential = await signInWithEmailAndPassword(auth, email, password);
-    const user = credential.user;
+    await ensureSessionPersistence();
+    const result = await signInWithEmail(email, password);
+    if (!result.success) return { success: false, error: result.error };
 
-    const q = query(
-      collection(db, "authorizedUsers"),
-      where("email", "==", user.email)
-    );
-    const snaps = await getDocs(q);
-    if (snaps.empty) {
-      await firebaseSignOut(auth);
+    const data = await getAuthorizedUserByEmail(result.user.email ?? email);
+    if (!data) {
+      await signOutUser();
       return { success: false, error: "Access denied. Contact your administrator." };
     }
-
-    const data = snaps.docs[0].data();
     if (data.role === "admin") {
-      await firebaseSignOut(auth);
+      await signOutUser();
       return { success: false, error: "Please use the Admin portal to log in." };
     }
-
     if (data.role !== "client") {
-      await firebaseSignOut(auth);
+      await signOutUser();
       return { success: false, error: "Access denied. Contact your administrator." };
     }
 
     setClientPortalSession({
-      email: user.email || email,
-      name: data.name || user.displayName || user.email || "Client",
+      email: result.user.email || email,
+      name: data.name || result.user.displayName || result.user.email || "Client",
       loggedInAt: new Date().toISOString(),
       companyId: DEFAULT_ORGANIZATION_ID,
     });
 
     return { success: true };
   } catch (err: unknown) {
-    const code = (err as { code?: string }).code ?? "";
     const message = (err as { message?: string }).message ?? "";
-    console.error("Firebase error code:", code);
-    console.error("Firebase error message:", message);
-    return { success: false, error: `Error: ${code} — ${message}` };
+    return { success: false, error: `Error: ${message}` };
   }
 }
 
@@ -123,46 +108,28 @@ export async function logoutClientPortal(): Promise<void> {
   try {
     sessionStorage.clear();
   } catch {
-    // ignore — Firebase sign-out still completes
+    // ignore — sign-out still completes
   }
-  try {
-    await firebaseSignOut(auth);
-  } catch {
-    // ignore — session is already cleared
-  }
+  await signOutUser();
 }
 
-export async function sendClientPortalPasswordReset(
-  email: string
-): Promise<ResetResult> {
-  try {
-    await firebaseSendPasswordReset(auth, email);
-    return { success: true };
-  } catch (err: unknown) {
-    const code = (err as { code?: string }).code ?? "";
-    if (code === "auth/user-not-found" || code === "auth/invalid-email") {
-      return { success: true }; // don't reveal whether email exists
-    }
-    return { success: false, error: "Failed to send reset email. Try again." };
-  }
+export async function sendClientPortalPasswordReset(email: string): Promise<ResetResult> {
+  const res = await sendPasswordReset(email);
+  if (res.success) return { success: true };
+  return { success: false, error: res.error ?? "Failed to send reset email. Try again." };
 }
 
 export function onClientPortalAuthStateChanged(
-  callback: (user: User | null) => void
+  callback: (user: AppUser | null) => void
 ): () => void {
-  return firebaseOnAuthStateChanged(auth, callback);
+  return onAuthChange(callback);
 }
 
-// Fetches the user's Firestore document fields to pre-fill the settings profile.
-// Returns empty strings for any field not present in the document.
-export async function getClientPortalFirestoreProfile(
-  email: string
-): Promise<FirestoreProfile> {
+// Fetches the authorized-user record to pre-fill the settings profile.
+export async function getClientPortalFirestoreProfile(email: string): Promise<FirestoreProfile> {
   try {
-    const q = query(collection(db, "authorizedUsers"), where("email", "==", email));
-    const snaps = await getDocs(q);
-    if (snaps.empty) return { name: "", position: "", department: "", company: "" };
-    const data = snaps.docs[0].data();
+    const data = await getAuthorizedUserByEmail(email);
+    if (!data) return { name: "", position: "", department: "", company: "" };
     return {
       name: String(data.name || ""),
       position: String(data.position || ""),
@@ -178,31 +145,7 @@ export async function changeClientPortalPassword(
   currentPassword: string,
   newPassword: string
 ): Promise<ChangePasswordResult> {
-  try {
-    const user = auth.currentUser;
-    console.log("Current user:", user?.email);
-    console.log("User provider:", user?.providerData);
-
-    if (!user || !user.email) {
-      return { success: false, error: "Session expired. Please log in again." };
-    }
-
-    const credential = EmailAuthProvider.credential(user.email, currentPassword);
-
-    console.log("Attempting reauthentication...");
-    await reauthenticateWithCredential(user, credential);
-    console.log("Reauthentication successful");
-
-    await updatePassword(user, newPassword);
-    console.log("Password updated successfully");
-
-    return { success: true };
-  } catch (err: unknown) {
-    console.error("Full error:", err);
-    console.error("Error code:", (err as { code?: string }).code);
-    console.error("Error message:", (err as { message?: string }).message);
-    const code = (err as { code?: string }).code ?? "";
-    const message = (err as { message?: string }).message ?? "";
-    return { success: false, error: `Error: ${code} — ${message}` };
-  }
+  const res = await changePassword(currentPassword, newPassword);
+  if (res.success) return { success: true };
+  return { success: false, error: res.error };
 }

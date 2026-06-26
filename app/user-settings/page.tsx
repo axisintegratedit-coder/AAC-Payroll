@@ -4,9 +4,8 @@
 
 import { KeyRound, LogOut, Pencil, Save, ShieldCheck, UserCog, X } from "lucide-react";
 import { useEffect, useState } from "react";
-import { EmailAuthProvider, reauthenticateWithCredential, signOut, updatePassword } from "firebase/auth";
 import { useRouter } from "next/navigation";
-import { auth } from "@/lib/firebase";
+import { getCurrentUser, signOutUser, changePassword } from "@/lib/authClient";
 import { clearCurrentAdminUser, getCurrentAdminUser, type AdminRole, type AdminUser } from "@/lib/adminAuth";
 import { applyAppTheme, DEFAULT_APP_THEME, normalizeTheme, type AppTheme } from "@/lib/appTheme";
 import { getConfigItem } from "@/lib/firestore";
@@ -66,11 +65,7 @@ export default function UserSettingsPage() {
     } catch {
       // ignore — Firebase sign-out still completes
     }
-    try {
-      await signOut(auth);
-    } catch (error) {
-      console.error(error);
-    }
+    await signOutUser();
 
     clearCurrentAdminUser();
     router.replace("/login");
@@ -120,7 +115,7 @@ export default function UserSettingsPage() {
   }
 
   async function handleChangePassword() {
-    const user = auth?.currentUser;
+    const user = getCurrentUser();
     if (!user || !user.email) {
       window.alert("No signed-in account found. Please log in again.");
       return;
@@ -148,10 +143,20 @@ export default function UserSettingsPage() {
 
     setIsChangingPassword(true);
     try {
-      // Firebase requires a recent login to change the password, so re-authenticate first.
-      const credential = EmailAuthProvider.credential(user.email, currentPassword);
-      await reauthenticateWithCredential(user, credential);
-      await updatePassword(user, newPassword);
+      const result = await changePassword(currentPassword, newPassword);
+      if (!result.success) {
+        const msg = result.error || "";
+        if (/wrong-password|invalid-credential|incorrect/i.test(msg)) {
+          window.alert("Your current password is incorrect.");
+        } else if (/weak-password/i.test(msg)) {
+          window.alert("New password is too weak. Use at least 6 characters.");
+        } else if (/too-many-requests/i.test(msg)) {
+          window.alert("Too many attempts. Please wait a moment and try again.");
+        } else {
+          window.alert("Could not change password. Please try again.");
+        }
+        return;
+      }
 
       logAudit({
         action: "EDITED",
@@ -167,16 +172,7 @@ export default function UserSettingsPage() {
       window.alert("Password changed successfully.");
     } catch (error) {
       console.error(error);
-      const code = (error as { code?: string })?.code || "";
-      if (code === "auth/wrong-password" || code === "auth/invalid-credential") {
-        window.alert("Your current password is incorrect.");
-      } else if (code === "auth/weak-password") {
-        window.alert("New password is too weak. Use at least 6 characters.");
-      } else if (code === "auth/too-many-requests") {
-        window.alert("Too many attempts. Please wait a moment and try again.");
-      } else {
-        window.alert("Could not change password. Please try again.");
-      }
+      window.alert("Could not change password. Please try again.");
     } finally {
       setIsChangingPassword(false);
     }

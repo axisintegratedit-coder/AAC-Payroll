@@ -10,6 +10,7 @@
     "test": "vitest run"
   },
   "dependencies": {
+    "@supabase/supabase-js": "^2.108.2",
     "@types/file-saver": "^2.0.7",
     "exceljs": "^4.4.0",
     "file-saver": "^2.0.5",
@@ -30,6 +31,7 @@
     "@types/react-dom": "^19",
     "eslint": "^9",
     "eslint-config-next": "16.2.4",
+    "firebase-admin": "^14.1.0",
     "tailwindcss": "^4",
     "typescript": "^5",
     "vitest": "^4.0.15"

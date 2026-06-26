@@ -1,54 +1,52 @@
 "use client";
 
-import { signInWithEmailAndPassword, signInWithPopup, signOut } from "firebase/auth";
-import { collection, getDocs, query, where } from "firebase/firestore";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
-import { auth, db, ensureSessionAuthPersistence, googleProvider, firebaseConfigured } from "@/lib/firebase";
+import {
+  isBackendConfigured,
+  signInWithEmail,
+  signInWithGoogle,
+  signOutUser,
+  getAuthorizedUserByEmail,
+} from "@/lib/authClient";
 
 export default function LoginPage() {
   const router = useRouter();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
 
+  async function gateAdmin(userEmail: string | null): Promise<boolean> {
+    const data = await getAuthorizedUserByEmail(userEmail);
+    if (!data) {
+      await signOutUser();
+      window.alert("Access denied. Your account is not authorized to use this portal.");
+      return false;
+    }
+    if (data.role === "client") {
+      await signOutUser();
+      window.alert("Access denied. Please use the Client Portal to log in.");
+      return false;
+    }
+    if (data.role !== "admin") {
+      await signOutUser();
+      window.alert("Access denied. Contact your administrator.");
+      return false;
+    }
+    return true;
+  }
+
   async function handleEmailLogin() {
     try {
-      if (!firebaseConfigured || !auth) {
-        window.alert("Firebase is not configured. Please set NEXT_PUBLIC_FIREBASE_* env vars.");
+      if (!isBackendConfigured()) {
+        window.alert("Backend is not configured. Please set the backend env vars.");
         return;
       }
-
-      await ensureSessionAuthPersistence();
-      const result = await signInWithEmailAndPassword(auth, email, password);
-      const userEmail = result.user.email;
-      if (!firebaseConfigured || !db) {
-        window.alert("Firebase is not configured. Please set NEXT_PUBLIC_FIREBASE_* env vars.");
+      const result = await signInWithEmail(email, password);
+      if (!result.success) {
+        window.alert("Sign in failed. Check your email and password and try again.");
         return;
       }
-
-      const q = query(collection(db, "authorizedUsers"), where("email", "==", userEmail));
-      const snaps = await getDocs(q);
-      if (snaps.empty) {
-        await signOut(auth);
-        window.alert("Access denied. Your account is not authorized to use this portal.");
-        return;
-      }
-
-      const data = snaps.docs[0].data();
-
-      if (data.role === "client") {
-        await signOut(auth);
-        window.alert("Access denied. Please use the Client Portal to log in.");
-        return;
-      }
-
-      if (data.role !== "admin") {
-        await signOut(auth);
-        window.alert("Access denied. Contact your administrator.");
-        return;
-      }
-
-      router.push("/");
+      if (await gateAdmin(result.user.email)) router.push("/");
     } catch (error) {
       console.error(error);
       window.alert("Sign in failed. Check your email and password and try again.");
@@ -57,42 +55,17 @@ export default function LoginPage() {
 
   async function handleGoogleLogin() {
     try {
-      if (!firebaseConfigured || !auth) {
-        window.alert("Firebase is not configured. Please set NEXT_PUBLIC_FIREBASE_* env vars.");
+      if (!isBackendConfigured()) {
+        window.alert("Backend is not configured. Please set the backend env vars.");
         return;
       }
-
-      await ensureSessionAuthPersistence();
-      const result = await signInWithPopup(auth, googleProvider);
-      const { email } = result.user;
-      if (!firebaseConfigured || !db) {
-        window.alert("Firebase is not configured. Please set NEXT_PUBLIC_FIREBASE_* env vars.");
+      const result = await signInWithGoogle();
+      if (!result.success) {
+        if (result.error === "__redirecting__") return; // OAuth redirect in progress
+        window.alert("Google login failed. Please try again.");
         return;
       }
-
-      const q = query(collection(db, "authorizedUsers"), where("email", "==", email));
-      const snaps = await getDocs(q);
-      if (snaps.empty) {
-        await signOut(auth);
-        window.alert("Access denied. Your account is not authorized to use this portal.");
-        return;
-      }
-
-      const data = snaps.docs[0].data();
-
-      if (data.role === "client") {
-        await signOut(auth);
-        window.alert("Access denied. Please use the Client Portal to log in.");
-        return;
-      }
-
-      if (data.role !== "admin") {
-        await signOut(auth);
-        window.alert("Access denied. Contact your administrator.");
-        return;
-      }
-
-      router.push("/");
+      if (await gateAdmin(result.user.email)) router.push("/");
     } catch (error) {
       console.error(error);
       window.alert("Google login failed. Please try again.");

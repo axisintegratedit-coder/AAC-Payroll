@@ -6,7 +6,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { storageKeys } from "@/lib/appStorage";
 import { getConfigItem, setConfigItem, getDataArray, setDataArray, getCollectionItems, setCollectionItems } from "@/lib/firestore";
 import { logAudit } from "@/lib/auditTrail";
-import { auth } from "@/lib/firebase";
+import { getCurrentUser } from "@/lib/authClient";
 import { applyAppTheme, DEFAULT_APP_THEME, normalizeTheme, type AppTheme } from "@/lib/appTheme";
 import {
   appendSalaryHistoryEntry,
@@ -1054,7 +1054,7 @@ async function saveEmployeesToDirectory(nextEmployees: EmployeeRecord[]): Promis
 }
 
 function getSalaryChangedBy() {
-  const user = auth.currentUser;
+  const user = getCurrentUser();
   return user?.displayName || user?.email || user?.uid || "unknown";
 }
 

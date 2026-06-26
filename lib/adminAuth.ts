@@ -1,4 +1,4 @@
-import { auth } from "./firebase";
+import { getCurrentUser } from "./authClient";
 import { getAuthorizedUserProfile, waitForAuthUser } from "./authRoles";
 
 export type AdminRole =
@@ -19,7 +19,7 @@ export type AdminUser = {
 };
 
 export function getCurrentAdminUser(): AdminUser | null {
-  const user = auth.currentUser;
+  const user = getCurrentUser();
   if (!user) return null;
   return {
     uid: user.uid,

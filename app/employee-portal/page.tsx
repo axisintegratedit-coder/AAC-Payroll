@@ -100,6 +100,7 @@ type EmployeeRecord = {
   mustChangePassword?: boolean;
   portalStatus?: "Active" | "Locked" | "Disabled";
   lastPasswordChangedAt?: string;
+  profileEditedAt?: string;
 };
 
 type LeaveRequest = {
@@ -998,7 +999,7 @@ function PortalPhotoCard({ employee, onPhotoChange }: { employee: EmployeeRecord
         </div>
       </div>
       <div className="px-5 py-3 text-sm text-slate-500">
-        You may update your profile photo here. Other details are view-only — submit a change request to HR for corrections.
+        You may update your profile photo here. Your contact, bank, government ID, and personal details can be edited below — changes are saved straight to your HR record.
       </div>
     </div>
   );
@@ -1014,6 +1015,7 @@ export default function EmployeePortalPage() {
   const [changeRequests, setChangeRequests] = useState<ChangeRequest[]>([]);
   const [coeHistory, setCoeHistory] = useState<CoeHistoryItem[]>([]);
   const [companyProfile, setCompanyProfile] = useState<CompanyProfile>({});
+  const [departmentOptions, setDepartmentOptions] = useState<string[]>([]);
   const [signatories, setSignatories] = useState<Signatories>({});
   const [usernameInput, setUsernameInput] = useState("");
   const [passwordInput, setPasswordInput] = useState("");
@@ -1081,6 +1083,7 @@ export default function EmployeePortalPage() {
       setChangeRequests(await readStorage<ChangeRequest[]>(STORAGE_KEYS.employeeChangeRequests, []));
       setCoeHistory(await readStorage<CoeHistoryItem[]>(STORAGE_KEYS.coeHistory, []));
       setCompanyProfile(await readAnyStorage<CompanyProfile>([storageKeys.companyInformation, STORAGE_KEYS.companyProfile, "companySettings", "businessProfile"], {}));
+      setDepartmentOptions(await getDataArray<string>(storageKeys.departments, []));
       setSignatories(await readAnyStorage<Signatories>([storageKeys.signatories, STORAGE_KEYS.signatories, "companySignatories", "authorizedSignatories", "signatorySettings"], {}));
     }
 
@@ -1422,6 +1425,20 @@ export default function EmployeePortalPage() {
     if (!employee) return;
     const nextEmployees = await updateEmployeePortalPhoto(employees, employee.employeeNo, dataUrl);
     setEmployees(nextEmployees);
+  }
+
+  async function handlePortalProfileSave(updates: Partial<EmployeeRecord>) {
+    if (!employee) return;
+    const editedAt = new Date().toISOString();
+    const nextEmployees = employees.map((item) =>
+      String(item.employeeNo || "").toLowerCase() === employee.employeeNo.toLowerCase()
+        ? { ...item, ...updates, profileEditedAt: editedAt }
+        : item
+    );
+    setEmployees(nextEmployees);
+    await saveStorage(STORAGE_KEYS.employees, nextEmployees);
+    window.dispatchEvent(new Event(`${STORAGE_KEYS.employees}-updated`));
+    window.dispatchEvent(new Event("employees-updated"));
   }
 
   function openStoredPayslipDocument(document: EmployeePayslipDocument) {
@@ -1879,7 +1896,7 @@ export default function EmployeePortalPage() {
           </div>
           <div className="p-5">
             {activeTab === "dashboard" ? <DashboardPanel employee={employee} myPayslipCount={payslipCount} /> : null}
-            {activeTab === "details" ? <EmployeeDetailsPanel employee={employee} onPhotoChange={handlePortalPhotoChange} /> : null}
+            {activeTab === "details" ? <EmployeeDetailsPanel employee={employee} onPhotoChange={handlePortalPhotoChange} onProfileSave={handlePortalProfileSave} departmentOptions={departmentOptions} /> : null}
             {activeTab === "attendance" ? <AttendanceDemoPanel employee={employee} demoNow={demoNow} demoClockStatus={demoClockStatus} demoTimeInAt={demoTimeInAt} demoTimeOutAt={demoTimeOutAt} demoTimeIn={demoTimeIn} demoTimeOut={demoTimeOut} resetDemoAttendance={resetDemoAttendance} /> : null}
             {activeTab === "changes" ? <ChangesPanel requestType={requestType} setRequestType={setRequestType} currentValue={currentValue} setCurrentValue={setCurrentValue} requestedValue={requestedValue} setRequestedValue={setRequestedValue} requestReason={requestReason} setRequestReason={setRequestReason} submitChangeRequest={submitChangeRequest} myChangeRequests={myChangeRequests} /> : null}
             {activeTab === "leaves" ? (
@@ -2131,19 +2148,292 @@ function DashboardPanel({ employee, myPayslipCount }: { employee: EmployeeRecord
   );
 }
 
-function EmployeeDetailsPanel({ employee, onPhotoChange }: { employee: EmployeeRecord; onPhotoChange: (dataUrl: string) => void }) {
+type EditableProfileDraft = {
+  // Basic employee information
+  firstName: string;
+  middleName: string;
+  lastName: string;
+  company: string;
+  department: string;
+  jobTitle: string;
+  employeeType: string;
+  employmentClassification: string;
+  employmentStatus: string;
+  isMinimumWageEarner: string;
+  userType: string;
+  // Job and work assignment
+  immediateSupervisor: string;
+  designatedWorkplace: string;
+  jobCode: string;
+  jobGrade: string;
+  costName: string;
+  eligibility: string;
+  biometricId: string;
+  shiftType: string;
+  payslipId: string;
+  // Employment dates and status notes
+  hireDate: string;
+  expectedRegularizationDate: string;
+  regularizationDate: string;
+  expectedSeparationDate: string;
+  separationDate: string;
+  reasonForLeaving: string;
+  employeeRemarks: string;
+  // Personal and contact
+  birthdate: string;
+  gender: string;
+  contactNumber: string;
+  emailAddress: string;
+  address: string;
+  // Government IDs
+  sss: string;
+  philhealth: string;
+  pagibig: string;
+  tin: string;
+  // Bank details
+  bankName: string;
+  bankAccountType: string;
+  bankAccountNumber: string;
+};
+
+function buildProfileDraft(employee: EmployeeRecord): EditableProfileDraft {
+  return {
+    firstName: String(employee.firstName || ""),
+    middleName: String(employee.middleName || ""),
+    lastName: String(employee.lastName || ""),
+    company: String(employee.company || ""),
+    department: String(employee.department || ""),
+    jobTitle: String(employee.jobTitle || employee.position || employee.designation || ""),
+    employeeType: String(employee.employeeType || ""),
+    employmentClassification: String(employee.employmentClassification || ""),
+    employmentStatus: String(employee.employmentStatus || ""),
+    isMinimumWageEarner: String(employee.isMinimumWageEarner || ""),
+    userType: String(employee.userType || ""),
+    immediateSupervisor: String(employee.immediateSupervisor || ""),
+    designatedWorkplace: String(employee.designatedWorkplace || ""),
+    jobCode: String(employee.jobCode || ""),
+    jobGrade: String(employee.jobGrade || ""),
+    costName: String(employee.costName || ""),
+    eligibility: String(employee.eligibility || ""),
+    biometricId: String(employee.biometricId || ""),
+    shiftType: String(employee.shiftType || ""),
+    payslipId: String(employee.payslipId || ""),
+    hireDate: String(employee.hireDate || ""),
+    expectedRegularizationDate: String(employee.expectedRegularizationDate || ""),
+    regularizationDate: String(employee.regularizationDate || ""),
+    expectedSeparationDate: String(employee.expectedSeparationDate || ""),
+    separationDate: String(employee.separationDate || ""),
+    reasonForLeaving: String(employee.reasonForLeaving || ""),
+    employeeRemarks: String(employee.employeeRemarks || ""),
+    birthdate: String(employee.birthdate || ""),
+    gender: String(employee.gender || ""),
+    contactNumber: String(employee.contactNumber || ""),
+    emailAddress: String(employee.emailAddress || ""),
+    address: String(employee.address || ""),
+    sss: String(employee.sss || employee.sssNumber || employee.sssNo || ""),
+    philhealth: String(employee.philhealth || employee.philhealthNumber || employee.philHealthNumber || employee.philhealthNo || employee.philHealthNo || employee.phicNumber || employee.phicNo || ""),
+    pagibig: String(employee.pagibig || employee.pagibigNumber || employee.pagIbigNumber || employee.pagibigNo || employee.pagIbigNo || employee.hdmfNumber || employee.hdmfNo || ""),
+    tin: String(employee.tin || employee.tinNumber || ""),
+    bankName: String(employee.bankName || ""),
+    bankAccountType: String(employee.bankAccountType || ""),
+    bankAccountNumber: String(employee.bankAccountNumber || ""),
+  };
+}
+
+// Writes canonical keys and clears legacy alias keys so a stale alias can't shadow the new value in the admin list.
+function draftToEmployeeUpdates(draft: EditableProfileDraft): Partial<EmployeeRecord> {
+  return {
+    firstName: draft.firstName.trim(),
+    lastName: draft.lastName.trim(),
+    company: draft.company.trim(),
+    department: draft.department.trim(),
+    jobTitle: draft.jobTitle.trim(),
+    position: undefined,
+    designation: undefined,
+    employeeType: draft.employeeType.trim(),
+    employmentClassification: draft.employmentClassification.trim(),
+    employmentStatus: draft.employmentStatus.trim(),
+    isMinimumWageEarner: draft.isMinimumWageEarner.trim(),
+    userType: draft.userType.trim(),
+    immediateSupervisor: draft.immediateSupervisor.trim(),
+    designatedWorkplace: draft.designatedWorkplace.trim(),
+    jobCode: draft.jobCode.trim(),
+    jobGrade: draft.jobGrade.trim(),
+    costName: draft.costName.trim(),
+    eligibility: draft.eligibility.trim(),
+    biometricId: draft.biometricId.trim(),
+    shiftType: draft.shiftType.trim(),
+    payslipId: draft.payslipId.trim(),
+    hireDate: draft.hireDate.trim(),
+    expectedRegularizationDate: draft.expectedRegularizationDate.trim(),
+    regularizationDate: draft.regularizationDate.trim(),
+    expectedSeparationDate: draft.expectedSeparationDate.trim(),
+    separationDate: draft.separationDate.trim(),
+    reasonForLeaving: draft.reasonForLeaving.trim(),
+    employeeRemarks: draft.employeeRemarks.trim(),
+    birthdate: draft.birthdate.trim(),
+    gender: draft.gender.trim(),
+    middleName: draft.middleName.trim(),
+    contactNumber: draft.contactNumber.trim(),
+    emailAddress: draft.emailAddress.trim(),
+    address: draft.address.trim(),
+    sss: draft.sss.trim(),
+    sssNumber: undefined,
+    sssNo: undefined,
+    philhealth: draft.philhealth.trim(),
+    philhealthNumber: undefined,
+    philHealthNumber: undefined,
+    philhealthNo: undefined,
+    philHealthNo: undefined,
+    phicNumber: undefined,
+    phicNo: undefined,
+    pagibig: draft.pagibig.trim(),
+    pagibigNumber: undefined,
+    pagIbigNumber: undefined,
+    pagibigNo: undefined,
+    pagIbigNo: undefined,
+    hdmfNumber: undefined,
+    hdmfNo: undefined,
+    tin: draft.tin.trim(),
+    tinNumber: undefined,
+    bankName: draft.bankName.trim(),
+    bankAccountType: draft.bankAccountType.trim(),
+    bankAccountNumber: draft.bankAccountNumber.trim(),
+  };
+}
+
+// Mirrors the input limitations enforced in the admin "Add Employee" form (app/add-employee/page.tsx)
+// so portal edits validate identically before saving to the shared employee record.
+const portalDigitsOnly = (value: string) => value.replace(/\D/g, "");
+
+function portalFormatSss(value: string) {
+  return portalDigitsOnly(value).slice(0, 10);
+}
+
+function portalFormatPhilHealth(value: string) {
+  const digits = portalDigitsOnly(value).slice(0, 12);
+  if (digits.length <= 2) return digits;
+  if (digits.length <= 11) return `${digits.slice(0, 2)}-${digits.slice(2)}`;
+  return `${digits.slice(0, 2)}-${digits.slice(2, 11)}-${digits.slice(11)}`;
+}
+
+function portalFormatPagibig(value: string) {
+  const digits = portalDigitsOnly(value).slice(0, 12);
+  if (digits.length <= 4) return digits;
+  if (digits.length <= 8) return `${digits.slice(0, 4)}-${digits.slice(4)}`;
+  return `${digits.slice(0, 4)}-${digits.slice(4, 8)}-${digits.slice(8)}`;
+}
+
+function portalFormatTin(value: string) {
+  const digits = portalDigitsOnly(value).slice(0, 12);
+  if (digits.length <= 3) return digits;
+  if (digits.length <= 6) return `${digits.slice(0, 3)}-${digits.slice(3)}`;
+  if (digits.length <= 9) return `${digits.slice(0, 3)}-${digits.slice(3, 6)}-${digits.slice(6)}`;
+  return `${digits.slice(0, 3)}-${digits.slice(3, 6)}-${digits.slice(6, 9)}-${digits.slice(9)}`;
+}
+
+const PORTAL_GENDER_OPTIONS = ["", "Female", "Male"];
+const PORTAL_EMPLOYEE_TYPE_OPTIONS = ["Rank and File", "Supervisory", "Managerial"];
+const PORTAL_EMPLOYMENT_STATUS_OPTIONS = ["Regular", "Probationary", "Terminated"];
+const PORTAL_YES_NO_OPTIONS = ["No", "Yes"];
+const PORTAL_USER_TYPE_OPTIONS = ["Employee", "Administrator"];
+const PORTAL_BANK_ACCOUNT_TYPE_OPTIONS = ["Savings", "Checking", "Payroll", "Other"];
+
+function PortalEditField({ label, value, onChange, type = "text", required, placeholder, maxLength, inputMode, hint, count }: { label: string; value: string; onChange: (value: string) => void; type?: string; required?: boolean; placeholder?: string; maxLength?: number; inputMode?: "numeric" | "text" | "email" | "tel"; hint?: string; count?: number }) {
+  return (
+    <label className="block rounded-lg border border-slate-200 bg-white p-3.5 shadow-sm">
+      <div className="text-[10px] font-semibold uppercase tracking-[0.1em] text-slate-500">{label}{required ? <span className="text-rose-500"> *</span> : null}</div>
+      <input type={type} value={value} onChange={(event) => onChange(event.target.value)} placeholder={placeholder} maxLength={maxLength} inputMode={inputMode} className="mt-1.5 w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm font-semibold text-slate-800 outline-none focus:border-[#0a4f8f]" />
+      {typeof count === "number" && maxLength ? <div className="mt-1 text-right text-[11px] font-semibold text-slate-400">{count}/{maxLength}</div> : null}
+      {hint ? <div className="mt-1 text-[11px] font-medium leading-snug text-slate-400">{hint}</div> : null}
+    </label>
+  );
+}
+
+function PortalSelectField({ label, value, onChange, options, required, hint }: { label: string; value: string; onChange: (value: string) => void; options: string[]; required?: boolean; hint?: string }) {
+  return (
+    <label className="block rounded-lg border border-slate-200 bg-white p-3.5 shadow-sm">
+      <div className="text-[10px] font-semibold uppercase tracking-[0.1em] text-slate-500">{label}{required ? <span className="text-rose-500"> *</span> : null}</div>
+      <select value={value} onChange={(event) => onChange(event.target.value)} className="mt-1.5 w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm font-semibold text-slate-800 outline-none focus:border-[#0a4f8f]">
+        {options.map((option) => <option key={option} value={option}>{option === "" ? "Select (optional)" : option}</option>)}
+      </select>
+      {hint ? <div className="mt-1 text-[11px] font-medium leading-snug text-slate-400">{hint}</div> : null}
+    </label>
+  );
+}
+
+function EmployeeDetailsPanel({ employee, onPhotoChange, onProfileSave, departmentOptions }: { employee: EmployeeRecord; onPhotoChange: (dataUrl: string) => void; onProfileSave: (updates: Partial<EmployeeRecord>) => Promise<void>; departmentOptions: string[] }) {
   const allowanceRows = getPortalAllowanceRows(employee);
+  const [isEditing, setIsEditing] = useState(false);
+  const [saving, setSaving] = useState(false);
+  // Once the one-time edit is recorded on the employee record, always leave edit mode —
+  // guards against any timing where the save persisted but setIsEditing(false) didn't stick.
+  useEffect(() => {
+    if (employee.profileEditedAt) setIsEditing(false);
+  }, [employee.profileEditedAt]);
+  const [draft, setDraft] = useState<EditableProfileDraft>(() => buildProfileDraft(employee));
+  const hasEdited = Boolean(employee.profileEditedAt);
+  const departmentSelectOptions = useMemo(() => {
+    const merged = ["", ...departmentOptions];
+    if (draft.department && !merged.includes(draft.department)) merged.push(draft.department);
+    return merged;
+  }, [departmentOptions, draft.department]);
+
+  function startEditing() {
+    setDraft(buildProfileDraft(employee));
+    setIsEditing(true);
+  }
+
+  function updateDraft(key: keyof EditableProfileDraft, value: string) {
+    setDraft((previous) => ({ ...previous, [key]: value }));
+  }
+
+  async function saveDraft() {
+    const confirmed = window.confirm(
+      "Are you sure you want to save these changes?\n\nYou can only edit your profile once. After saving, these details become read-only and any further corrections must go through HR."
+    );
+    if (!confirmed) return;
+    setSaving(true);
+    try {
+      await onProfileSave(draftToEmployeeUpdates(draft));
+      setIsEditing(false);
+    } catch (error) {
+      window.alert("We couldn't save your changes. Please try again.");
+      console.error("Failed to save employee portal profile", error);
+    } finally {
+      setSaving(false);
+    }
+  }
 
   return (
     <div className="grid gap-6">
       <PortalPhotoCard employee={employee} onPhotoChange={onPhotoChange} />
-      <PortalDetailSection title="Basic Employee Information"><PortalInfoCard label="Employee No." value={displayText(employee.employeeNo)} /><PortalInfoCard label="Full Name" value={getEmployeeDisplayNameForPortal(employee)} /><PortalInfoCard label="Company" value={displayText(employee.company)} /><PortalInfoCard label="Department" value={displayText(employee.department)} /><PortalInfoCard label="Job Title" value={displayText(employee.jobTitle || employee.position || employee.designation)} /><PortalInfoCard label="Employee Type" value={displayText(employee.employeeType)} /><PortalInfoCard label="Employment Classification" value={displayText(employee.employmentClassification)} /><PortalInfoCard label="BIR Employment Status" value={getBirStatusText(employee.employmentStatus)} /><PortalInfoCard label="Minimum Wage Earner" value={displayText(employee.isMinimumWageEarner)} /><PortalInfoCard label="User Type" value={displayText(employee.userType)} /></PortalDetailSection>
-      <PortalInfoCard label="Gender" value={displayText(employee.gender)} />
-      <PortalDetailSection title="Job and Work Assignment"><PortalInfoCard label="Immediate Supervisor" value={displayText(employee.immediateSupervisor)} /><PortalInfoCard label="Designated Workplace" value={displayText(employee.designatedWorkplace)} /><PortalInfoCard label="Job Code" value={displayText(employee.jobCode)} /><PortalInfoCard label="Job Grade" value={displayText(employee.jobGrade)} /><PortalInfoCard label="Cost Name" value={displayText(employee.costName)} /><PortalInfoCard label="Eligibility" value={displayText(employee.eligibility)} /><PortalInfoCard label="Biometric ID" value={displayText(employee.biometricId)} /><PortalInfoCard label="Shift Type" value={displayText(employee.shiftType)} /><PortalInfoCard label="Payslip ID" value={displayText(employee.payslipId)} /></PortalDetailSection>
-      <PortalDetailSection title="Employment Dates and Status Notes"><PortalInfoCard label="Hire Date" value={formatDate(employee.hireDate)} /><PortalInfoCard label="Expected Regularization Date" value={formatDate(employee.expectedRegularizationDate)} /><PortalInfoCard label="Regularization Date" value={formatDate(employee.regularizationDate)} /><PortalInfoCard label="Expected Separation Date" value={formatDate(employee.expectedSeparationDate)} /><PortalInfoCard label="Separation Date" value={formatDate(employee.separationDate)} /><PortalInfoCard label="Reason for Leaving" value={displayText(employee.reasonForLeaving)} /><PortalInfoCard label="Employee Remarks" value={displayText(employee.employeeRemarks)} /></PortalDetailSection>
-      <PortalDetailSection title="Personal and Contact Information"><PortalInfoCard label="Birthdate" value={formatDate(employee.birthdate)} /><PortalInfoCard label="Contact Number" value={displayText(employee.contactNumber)} /><PortalInfoCard label="Email Address" value={displayText(employee.emailAddress)} /><PortalInfoCard label="Address" value={displayText(employee.address)} /></PortalDetailSection>
-      <PortalDetailSection title="Government Identification Numbers"><PortalInfoCard label="SSS Number" value={displayText(employee.sss || employee.sssNumber || employee.sssNo)} /><PortalInfoCard label="PhilHealth Number" value={displayText(employee.philhealth || employee.philhealthNumber || employee.philHealthNumber || employee.philhealthNo || employee.philHealthNo || employee.phicNumber || employee.phicNo)} /><PortalInfoCard label="Pag-IBIG Number" value={displayText(employee.pagibig || employee.pagibigNumber || employee.pagIbigNumber || employee.pagibigNo || employee.pagIbigNo || employee.hdmfNumber || employee.hdmfNo)} /><PortalInfoCard label="TIN" value={displayText(employee.tin || employee.tinNumber)} /></PortalDetailSection>
-      <PortalDetailSection title="Bank Details"><PortalInfoCard label="Bank Name" value={displayText(employee.bankName)} /><PortalInfoCard label="Bank Account Type" value={displayText(employee.bankAccountType)} /><PortalInfoCard label="Bank Account Number" value={maskAccountNumber(employee.bankAccountNumber)} /></PortalDetailSection>
+      <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-slate-200 bg-white px-5 py-4 shadow-sm">
+        <div>
+          <div className="text-sm font-semibold text-slate-900">Editable Personal Details</div>
+          <div className="mt-0.5 text-sm text-slate-500">
+            {hasEdited
+              ? `You have already used your one-time profile edit on ${formatDateTime(employee.profileEditedAt)}. Further corrections must go through HR.`
+              : "Update your employee information below. You can only edit your profile once, and changes save directly to your HR record."}
+          </div>
+        </div>
+        {isEditing ? (
+          <div className="flex flex-wrap gap-2">
+            <button type="button" onClick={() => setIsEditing(false)} disabled={saving} className="rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-700 transition hover:bg-slate-50 disabled:opacity-60">Cancel</button>
+            <button type="button" onClick={saveDraft} disabled={saving} className="rounded-lg border border-[#0a4f8f] bg-[#0a4f8f] px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-[#0c3460] disabled:opacity-60">{saving ? "Saving…" : "Save Changes"}</button>
+          </div>
+        ) : hasEdited ? (
+          <span className="rounded-lg border border-slate-200 bg-slate-100 px-4 py-2 text-sm font-semibold text-slate-500">Edit Used</span>
+        ) : (
+          <button type="button" onClick={startEditing} className="rounded-lg border border-[#0a4f8f] bg-[#0a4f8f] px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-[#0c3460]">Edit Details</button>
+        )}
+      </div>
+      <PortalDetailSection title="Basic Employee Information"><PortalInfoCard label="Employee No." value={displayText(employee.employeeNo)} />{isEditing ? <><PortalEditField label="Last Name" required value={draft.lastName} onChange={(value) => updateDraft("lastName", value)} placeholder="Enter last name" /><PortalEditField label="First Name" required value={draft.firstName} onChange={(value) => updateDraft("firstName", value)} placeholder="Enter first name" /><PortalEditField label="Middle Name" value={draft.middleName} onChange={(value) => updateDraft("middleName", value)} placeholder="Enter middle name" /><PortalEditField label="Company" value={draft.company} onChange={(value) => updateDraft("company", value)} placeholder="Enter company" /><PortalSelectField label="Department" required value={draft.department} onChange={(value) => updateDraft("department", value)} options={departmentSelectOptions} /><PortalEditField label="Job Title" required value={draft.jobTitle} onChange={(value) => updateDraft("jobTitle", value)} placeholder="Enter job title" /><PortalSelectField label="Employee Type" required value={draft.employeeType} onChange={(value) => updateDraft("employeeType", value)} options={PORTAL_EMPLOYEE_TYPE_OPTIONS} /><PortalEditField label="Employment Classification" value={draft.employmentClassification} onChange={(value) => updateDraft("employmentClassification", value)} /><PortalSelectField label="Employment Status" required value={draft.employmentStatus} onChange={(value) => updateDraft("employmentStatus", value)} options={PORTAL_EMPLOYMENT_STATUS_OPTIONS} hint="BIR employment status" /><PortalSelectField label="Minimum Wage Earner" required value={draft.isMinimumWageEarner || "No"} onChange={(value) => updateDraft("isMinimumWageEarner", value)} options={PORTAL_YES_NO_OPTIONS} /><PortalSelectField label="User Type" required value={draft.userType || "Employee"} onChange={(value) => updateDraft("userType", value)} options={PORTAL_USER_TYPE_OPTIONS} /></> : <><PortalInfoCard label="Full Name" value={getEmployeeDisplayNameForPortal(employee)} /><PortalInfoCard label="Company" value={displayText(employee.company)} /><PortalInfoCard label="Department" value={displayText(employee.department)} /><PortalInfoCard label="Job Title" value={displayText(employee.jobTitle || employee.position || employee.designation)} /><PortalInfoCard label="Employee Type" value={displayText(employee.employeeType)} /><PortalInfoCard label="Employment Classification" value={displayText(employee.employmentClassification)} /><PortalInfoCard label="BIR Employment Status" value={getBirStatusText(employee.employmentStatus)} /><PortalInfoCard label="Minimum Wage Earner" value={displayText(employee.isMinimumWageEarner)} /><PortalInfoCard label="User Type" value={displayText(employee.userType)} /></>}</PortalDetailSection>
+      <PortalDetailSection title="Job and Work Assignment">{isEditing ? <><PortalEditField label="Immediate Supervisor" value={draft.immediateSupervisor} onChange={(value) => updateDraft("immediateSupervisor", value)} /><PortalEditField label="Designated Workplace" value={draft.designatedWorkplace} onChange={(value) => updateDraft("designatedWorkplace", value)} /><PortalEditField label="Job Code" value={draft.jobCode} onChange={(value) => updateDraft("jobCode", value)} /><PortalEditField label="Job Grade" value={draft.jobGrade} onChange={(value) => updateDraft("jobGrade", value)} /><PortalEditField label="Cost Name" value={draft.costName} onChange={(value) => updateDraft("costName", value)} /><PortalEditField label="Eligibility" value={draft.eligibility} onChange={(value) => updateDraft("eligibility", value)} /><PortalEditField label="Biometric ID" value={draft.biometricId} onChange={(value) => updateDraft("biometricId", value)} /><PortalEditField label="Shift Type" value={draft.shiftType} onChange={(value) => updateDraft("shiftType", value)} /><PortalEditField label="Payslip ID" value={draft.payslipId} onChange={(value) => updateDraft("payslipId", value)} /></> : <><PortalInfoCard label="Immediate Supervisor" value={displayText(employee.immediateSupervisor)} /><PortalInfoCard label="Designated Workplace" value={displayText(employee.designatedWorkplace)} /><PortalInfoCard label="Job Code" value={displayText(employee.jobCode)} /><PortalInfoCard label="Job Grade" value={displayText(employee.jobGrade)} /><PortalInfoCard label="Cost Name" value={displayText(employee.costName)} /><PortalInfoCard label="Eligibility" value={displayText(employee.eligibility)} /><PortalInfoCard label="Biometric ID" value={displayText(employee.biometricId)} /><PortalInfoCard label="Shift Type" value={displayText(employee.shiftType)} /><PortalInfoCard label="Payslip ID" value={displayText(employee.payslipId)} /></>}</PortalDetailSection>
+      <PortalDetailSection title="Employment Dates and Status Notes">{isEditing ? <><PortalEditField label="Hire Date" type="date" value={draft.hireDate} onChange={(value) => updateDraft("hireDate", value)} /><PortalEditField label="Expected Regularization Date" type="date" value={draft.expectedRegularizationDate} onChange={(value) => updateDraft("expectedRegularizationDate", value)} /><PortalEditField label="Regularization Date" type="date" value={draft.regularizationDate} onChange={(value) => updateDraft("regularizationDate", value)} /><PortalEditField label="Expected Separation Date" type="date" value={draft.expectedSeparationDate} onChange={(value) => updateDraft("expectedSeparationDate", value)} /><PortalEditField label="Separation Date" type="date" value={draft.separationDate} onChange={(value) => updateDraft("separationDate", value)} /><PortalEditField label="Reason for Leaving" value={draft.reasonForLeaving} onChange={(value) => updateDraft("reasonForLeaving", value)} placeholder="Enter reason for leaving" /><PortalEditField label="Employee Remarks" value={draft.employeeRemarks} onChange={(value) => updateDraft("employeeRemarks", value.slice(0, 300))} placeholder="Enter employee remarks" maxLength={300} count={draft.employeeRemarks.length} /></> : <><PortalInfoCard label="Hire Date" value={formatDate(employee.hireDate)} /><PortalInfoCard label="Expected Regularization Date" value={formatDate(employee.expectedRegularizationDate)} /><PortalInfoCard label="Regularization Date" value={formatDate(employee.regularizationDate)} /><PortalInfoCard label="Expected Separation Date" value={formatDate(employee.expectedSeparationDate)} /><PortalInfoCard label="Separation Date" value={formatDate(employee.separationDate)} /><PortalInfoCard label="Reason for Leaving" value={displayText(employee.reasonForLeaving)} /><PortalInfoCard label="Employee Remarks" value={displayText(employee.employeeRemarks)} /></>}</PortalDetailSection>
+      <PortalDetailSection title="Personal and Contact Information">{isEditing ? <><PortalEditField label="Birthdate" required type="date" value={draft.birthdate} onChange={(value) => updateDraft("birthdate", value)} /><PortalSelectField label="Gender" value={draft.gender} onChange={(value) => updateDraft("gender", value)} options={PORTAL_GENDER_OPTIONS} hint="Used for HR records and reporting only." /><PortalEditField label="Contact Number" required value={draft.contactNumber} onChange={(value) => updateDraft("contactNumber", value)} placeholder="Enter contact number" /><PortalEditField label="Email Address" required type="email" inputMode="email" value={draft.emailAddress} onChange={(value) => updateDraft("emailAddress", value)} placeholder="Enter email address" /><PortalEditField label="Address" required value={draft.address} onChange={(value) => updateDraft("address", value)} placeholder="Enter complete address" /></> : <><PortalInfoCard label="Birthdate" value={formatDate(employee.birthdate)} /><PortalInfoCard label="Gender" value={displayText(employee.gender)} /><PortalInfoCard label="Contact Number" value={displayText(employee.contactNumber)} /><PortalInfoCard label="Email Address" value={displayText(employee.emailAddress)} /><PortalInfoCard label="Address" value={displayText(employee.address)} /></>}</PortalDetailSection>
+      <PortalDetailSection title="Government Identification Numbers">{isEditing ? <><PortalEditField label="SSS Number" value={draft.sss} onChange={(value) => updateDraft("sss", portalFormatSss(value))} placeholder="10 digits" maxLength={10} inputMode="numeric" /><PortalEditField label="PhilHealth Number" value={draft.philhealth} onChange={(value) => updateDraft("philhealth", portalFormatPhilHealth(value))} placeholder="00-000000000-0" maxLength={14} inputMode="numeric" /><PortalEditField label="Pag-IBIG Number" value={draft.pagibig} onChange={(value) => updateDraft("pagibig", portalFormatPagibig(value))} placeholder="0000-0000-0000" maxLength={14} inputMode="numeric" /><PortalEditField label="TIN" value={draft.tin} onChange={(value) => updateDraft("tin", portalFormatTin(value))} placeholder="000-000-000-000" maxLength={15} inputMode="numeric" /></> : <><PortalInfoCard label="SSS Number" value={displayText(employee.sss || employee.sssNumber || employee.sssNo)} /><PortalInfoCard label="PhilHealth Number" value={displayText(employee.philhealth || employee.philhealthNumber || employee.philHealthNumber || employee.philhealthNo || employee.philHealthNo || employee.phicNumber || employee.phicNo)} /><PortalInfoCard label="Pag-IBIG Number" value={displayText(employee.pagibig || employee.pagibigNumber || employee.pagIbigNumber || employee.pagibigNo || employee.pagIbigNo || employee.hdmfNumber || employee.hdmfNo)} /><PortalInfoCard label="TIN" value={displayText(employee.tin || employee.tinNumber)} /></>}</PortalDetailSection>
+      <PortalDetailSection title="Bank Details">{isEditing ? <><PortalEditField label="Bank Name" required value={draft.bankName} onChange={(value) => updateDraft("bankName", value)} placeholder="Enter bank name" /><PortalSelectField label="Bank Account Type" required value={draft.bankAccountType || "Savings"} onChange={(value) => updateDraft("bankAccountType", value)} options={PORTAL_BANK_ACCOUNT_TYPE_OPTIONS} /><PortalEditField label="Bank Account Number" required value={draft.bankAccountNumber} onChange={(value) => updateDraft("bankAccountNumber", value)} placeholder="Enter bank account number" /></> : <><PortalInfoCard label="Bank Name" value={displayText(employee.bankName)} /><PortalInfoCard label="Bank Account Type" value={displayText(employee.bankAccountType)} /><PortalInfoCard label="Bank Account Number" value={maskAccountNumber(employee.bankAccountNumber)} /></>}</PortalDetailSection>
       <PortalDetailSection title="Payroll Setup and Fixed Allowances"><PortalInfoCard label="Payroll Frequency" value={displayText(employee.payrollRunType || "Semi-Monthly")} /><PortalInfoCard label="Monthly Basic Pay" value={peso(getPortalBasicPay(employee))} /><PortalInfoCard label="Hourly Rate" value={peso(employee.hourlyRate)} /><PortalInfoCard label="Total Fixed Allowances" value={peso(getPortalTotalAllowance(employee))} /><PortalInfoCard label="Total Monthly Package" value={peso(getPortalTotalMonthlyPackage(employee))} /><div className="rounded-2xl border border-slate-200 bg-slate-50 p-4 shadow-sm md:col-span-2 xl:col-span-3"><div className="flex flex-col justify-between gap-3 sm:flex-row sm:items-center"><div><div className="text-xs font-black uppercase tracking-[0.12em] text-slate-500">Allowance Breakdown</div><div className="mt-1 text-sm font-bold text-slate-600">Fixed allowances only. 13th month pay, Christmas bonus, and other year-end benefits are intentionally excluded here.</div></div><div className="rounded-full border border-blue-200 bg-blue-50 px-3 py-1 text-xs font-black text-blue-700">View-only</div></div>{allowanceRows.length > 0 ? <div className="mt-4 overflow-x-auto rounded-2xl border border-slate-200 bg-white"><table className="w-full border-collapse text-sm"><thead><tr className="bg-slate-100 text-left text-xs font-black uppercase tracking-[0.08em] text-slate-500"><th className="px-4 py-3">Allowance</th><th className="px-4 py-3 text-right">Amount</th></tr></thead><tbody>{allowanceRows.map((allowance, index) => <tr key={`${allowance.label}-${index}`} className="border-t border-slate-200"><td className="px-4 py-3 font-extrabold text-slate-800">{allowance.label}</td><td className="px-4 py-3 text-right font-black text-slate-950">{peso(allowance.amount)}</td></tr>)}</tbody></table></div> : <div className="mt-4 rounded-2xl border border-dashed border-slate-300 bg-white p-4 text-sm font-bold text-slate-500">No fixed allowance is currently saved for this employee.</div>}</div></PortalDetailSection>
       <PortalDetailSection title="Employee Portal Access"><PortalInfoCard label="Portal Username" value={displayText(employee.portalUsername)} /><PortalInfoCard label="Portal Status" value={displayText(employee.portalStatus || "Active")} /><PortalInfoCard label="Must Change Password" value={employee.mustChangePassword ? "Yes" : "No"} /><PortalInfoCard label="Last Password Changed" value={formatDateTime(employee.lastPasswordChangedAt)} /></PortalDetailSection>
     </div>

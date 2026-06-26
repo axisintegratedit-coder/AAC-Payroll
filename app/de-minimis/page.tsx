@@ -69,6 +69,18 @@ function makeBenefitId() {
   return `de-minimis-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
 }
 
+// Semi-monthly amounts are entered as the full monthly figure but stored per cutoff (÷2,
+// since the benefit applies on both cutoffs). Halve on save, double back when editing.
+function halveForSemiMonthly(value: number | undefined, frequency: DeMinimisFrequency) {
+  if (value === undefined || value === null) return value;
+  return frequency === "Semi-monthly" ? (Number(value) || 0) / 2 : value;
+}
+
+function doubleForSemiMonthly(value: number | undefined, frequency: DeMinimisFrequency) {
+  if (value === undefined || value === null) return value;
+  return frequency === "Semi-monthly" ? (Number(value) || 0) * 2 : value;
+}
+
 function emptyDraft(): BenefitDraft {
   return {
     name: "",
@@ -317,9 +329,9 @@ export default function DeMinimisPage() {
     setDraft({
       name: benefit.name,
       suggestedType: benefit.suggestedType,
-      amount: benefit.amount,
-      minAmount: benefit.minAmount,
-      maxAmount: benefit.maxAmount,
+      amount: doubleForSemiMonthly(benefit.amount, benefit.frequency) ?? 0,
+      minAmount: doubleForSemiMonthly(benefit.minAmount, benefit.frequency),
+      maxAmount: doubleForSemiMonthly(benefit.maxAmount, benefit.frequency),
       hasOwnCeiling: benefit.hasOwnCeiling,
       ceiling: benefit.ceiling,
       frequency: benefit.frequency,
@@ -415,9 +427,15 @@ export default function DeMinimisPage() {
     const cleanDraft = stripUndefinedAndEmptyStrings({
       ...draft,
       name: draft.name.trim(),
-      amount: Number(draft.amount) || 0,
-      minAmount: draft.minAmount === undefined || draft.minAmount === null ? undefined : Number(draft.minAmount),
-      maxAmount: draft.maxAmount === undefined || draft.maxAmount === null ? undefined : Number(draft.maxAmount),
+      amount: halveForSemiMonthly(Number(draft.amount) || 0, draft.frequency) ?? 0,
+      minAmount:
+        draft.minAmount === undefined || draft.minAmount === null
+          ? undefined
+          : halveForSemiMonthly(Number(draft.minAmount), draft.frequency),
+      maxAmount:
+        draft.maxAmount === undefined || draft.maxAmount === null
+          ? undefined
+          : halveForSemiMonthly(Number(draft.maxAmount), draft.frequency),
       hasOwnCeiling: Boolean(draft.hasOwnCeiling),
       ceiling: draft.hasOwnCeiling ? Number(draft.ceiling) || 0 : undefined,
       monthlyCutoff: draft.frequency === "Monthly" ? draft.monthlyCutoff : undefined,
@@ -761,6 +779,11 @@ export default function DeMinimisPage() {
                   onChange={(event) => setDraft((current) => ({ ...current, amount: Number(event.target.value) }))}
                   className={inputClassName}
                 />
+                {draft.frequency === "Semi-monthly" ? (
+                  <div className="mt-1 text-xs font-semibold text-slate-500">
+                    Enter the full monthly amount. It will be split as {formatCurrency((Number(draft.amount) || 0) / 2)} per cutoff.
+                  </div>
+                ) : null}
               </label>
               <label>
                 <div className="mb-1.5 text-xs font-black uppercase tracking-[0.08em] text-slate-500">Minimum Amount</div>

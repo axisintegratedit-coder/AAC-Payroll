@@ -1,9 +1,14 @@
 "use client";
 
-import { onAuthStateChanged, signOut } from "firebase/auth";
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
-import { auth, ensureSessionAuthPersistence, firebaseConfigured } from "@/lib/firebase";
+import {
+  isBackendConfigured,
+  ensureSessionPersistence,
+  getCurrentUser,
+  onAuthChange,
+  signOutUser,
+} from "@/lib/authClient";
 
 const ACTIVITY_EVENTS = ["mousemove", "mousedown", "keydown", "scroll", "touchstart", "click"] as const;
 const WARNING_AFTER_MS = 9 * 60 * 1000;
@@ -50,11 +55,7 @@ export default function SessionLifecycleManager() {
     clearTimers();
     setShowWarning(false);
     clearTabSession();
-    try {
-      if (firebaseConfigured && auth) await signOut(auth);
-    } catch {
-      // ignore
-    }
+    await signOutUser();
     if (reason === "inactive") {
       router.replace(getLoginPath(pathname));
     }
@@ -62,7 +63,7 @@ export default function SessionLifecycleManager() {
 
   function scheduleTimers() {
     clearTimers();
-    if (!firebaseConfigured || !auth || !auth.currentUser || isLoginPath(pathname)) return;
+    if (!isBackendConfigured() || !getCurrentUser() || isLoginPath(pathname)) return;
 
     lastActivityRef.current = Date.now();
     warningTimerRef.current = window.setTimeout(() => {
@@ -79,22 +80,22 @@ export default function SessionLifecycleManager() {
   }
 
   function resetActivity() {
-    if (!firebaseConfigured || !auth || !auth.currentUser || isLoginPath(pathname)) return;
+    if (!isBackendConfigured() || !getCurrentUser() || isLoginPath(pathname)) return;
     lastActivityRef.current = Date.now();
     setShowWarning(false);
     scheduleTimers();
   }
 
   useEffect(() => {
-    ensureSessionAuthPersistence().catch(() => {});
-    if (!firebaseConfigured || !auth) {
+    ensureSessionPersistence().catch(() => {});
+    if (!isBackendConfigured()) {
       setIsAuthenticated(false);
       return () => {
         clearTimers();
       };
     }
 
-    const unsubscribe = onAuthStateChanged(auth, (user) => {
+    const unsubscribe = onAuthChange((user) => {
       setIsAuthenticated(Boolean(user));
       if (!user) {
         clearTimers();
