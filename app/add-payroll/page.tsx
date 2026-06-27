@@ -394,6 +394,7 @@ type PayrollCalculationInputs = {
 type ReadonlySavedRow = {
   calculation: Calculation;
   standingAllowanceLines: StandingAllowanceLine[];
+  deMinimisLines?: DeMinimisLine[];
   loanDeductions: LoanDeductionLine[];
   oneTimeCredits: PayrollPipelineResult["oneTimeCreditLines"];
   oneTimeDeductions: PayrollPipelineResult["oneTimeDeductionLines"];
@@ -1177,6 +1178,7 @@ function PayrollDetailDrawer({
   deductionColumns,
   importedAttendance,
   standingAllowanceLines,
+  deMinimisLines = [],
   loanDeductions,
   oneTimeCredits,
   oneTimeDeductions,
@@ -1194,6 +1196,7 @@ function PayrollDetailDrawer({
   deductionColumns: BulkCustomColumn[];
   importedAttendance?: PayrollAttendanceRow;
   standingAllowanceLines: StandingAllowanceLine[];
+  deMinimisLines?: DeMinimisLine[];
   loanDeductions: LoanDeductionLine[];
   oneTimeCredits: PayrollPipelineResult["oneTimeCreditLines"];
   oneTimeDeductions: PayrollPipelineResult["oneTimeDeductionLines"];
@@ -1304,6 +1307,18 @@ function PayrollDetailDrawer({
                   ))
                 )}
               </DetailSection>
+              <DetailSection title="De Minimis Benefits">
+                {deMinimisLines.length === 0 ? (
+                  <EmptySourceRow label="No de minimis benefits for this cutoff" />
+                ) : (
+                  deMinimisLines.map((line) => (
+                    <ReadOnlyMoneyRow key={line.benefitId} label={line.name} amount={line.amount}>
+                      <StatusBadge>{line.frequency}</StatusBadge>
+                      {line.hasOwnCeiling ? <StatusBadge tone="emerald">Own ceiling</StatusBadge> : <StatusBadge tone="amber">Shared 90k</StatusBadge>}
+                    </ReadOnlyMoneyRow>
+                  ))
+                )}
+              </DetailSection>
             </>
           ) : null}
 
@@ -1394,6 +1409,7 @@ function PayrollSpreadsheetRow({
   deductionColumns,
   importedAttendance,
   standingAllowanceLines = [],
+  deMinimisLines = [],
   loanDeductions = [],
   oneTimeCredits = [],
   oneTimeDeductions = [],
@@ -1413,6 +1429,7 @@ function PayrollSpreadsheetRow({
   deductionColumns: BulkCustomColumn[];
   importedAttendance?: PayrollAttendanceRow;
   standingAllowanceLines?: StandingAllowanceLine[];
+  deMinimisLines?: DeMinimisLine[];
   loanDeductions?: LoanDeductionLine[];
   oneTimeCredits?: PayrollPipelineResult["oneTimeCreditLines"];
   oneTimeDeductions?: PayrollPipelineResult["oneTimeDeductionLines"];
@@ -1429,9 +1446,13 @@ function PayrollSpreadsheetRow({
     row.absencesHours,
     ...premiumColumns.map((column) => row.customPremiumValues[column.id]),
   ]);
-  const allowanceActiveCount = standingAllowanceLines.length;
-  const standingAllowanceTotal = standingAllowanceLines.reduce((sum, line) => sum + line.amount, 0);
-  const standingAllowanceSummaryLines = standingAllowanceLines.map((line) => `${line.name}: ${formatCurrency(line.amount)} · ${line.taxable ? "Taxable" : "Non-taxable"}`);
+  const allowanceActiveCount = standingAllowanceLines.length + deMinimisLines.length;
+  const deMinimisTotal = deMinimisLines.reduce((sum, line) => sum + line.amount, 0);
+  const standingAllowanceTotal = standingAllowanceLines.reduce((sum, line) => sum + line.amount, 0) + deMinimisTotal;
+  const standingAllowanceSummaryLines = [
+    ...standingAllowanceLines.map((line) => `${line.name}: ${formatCurrency(line.amount)} · ${line.taxable ? "Taxable" : "Non-taxable"}`),
+    ...deMinimisLines.map((line) => `${line.name}: ${formatCurrency(line.amount)} · De Minimis`),
+  ];
   const govtActiveCount = countActiveValues([row.sssEe, row.sssEr, row.philhealthEe, row.philhealthEr, row.pagibigEe, row.pagibigEr]);
   const otherActiveCount = countActiveValues([
     row.employeeAdvances,
@@ -2189,6 +2210,7 @@ function AddPayrollPageInner() {
             customDeductionsTotal: num(record.customDeductionsTotal),
           },
           standingAllowanceLines: record.standingAllowanceLines || [],
+          deMinimisLines: record.deMinimisLines || [],
           loanDeductions: record.loanDeductions || [],
           oneTimeCredits: record.oneTimeCredits || [],
           oneTimeDeductions: record.oneTimeDeductions || [],
@@ -3501,6 +3523,7 @@ function AddPayrollPageInner() {
           deductionColumns={deductionColumns}
           importedAttendance={drawerImportedAttendance}
           standingAllowanceLines={drawerSavedRow?.standingAllowanceLines || drawerPipeline?.standingAllowanceLines || []}
+          deMinimisLines={drawerSavedRow?.deMinimisLines || drawerPipeline?.deMinimisLines || []}
           loanDeductions={drawerSavedRow?.loanDeductions || drawerPipeline?.loanDeductionLines || []}
           oneTimeCredits={drawerSavedRow?.oneTimeCredits || drawerPipeline?.oneTimeCreditLines || []}
           oneTimeDeductions={drawerSavedRow?.oneTimeDeductions || drawerPipeline?.oneTimeDeductionLines || []}
@@ -4238,6 +4261,7 @@ function AddPayrollPageInner() {
                           deductionColumns={deductionColumns}
                           importedAttendance={importedAttendance}
                           standingAllowanceLines={savedRow?.standingAllowanceLines || pipeline?.standingAllowanceLines || []}
+                          deMinimisLines={savedRow?.deMinimisLines || pipeline?.deMinimisLines || []}
                           loanDeductions={savedRow?.loanDeductions || pipeline?.loanDeductionLines || []}
                           oneTimeCredits={savedRow?.oneTimeCredits || pipeline?.oneTimeCreditLines || []}
                           oneTimeDeductions={savedRow?.oneTimeDeductions || pipeline?.oneTimeDeductionLines || []}

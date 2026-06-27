@@ -25,9 +25,6 @@ export type DeMinimisBenefit = {
   monthlyCutoff?: DeMinimisCutoffSlot;
   annualMonth?: string;
   annualCutoff?: DeMinimisCutoffSlot;
-  // True once `amount` has been stored as the per-cutoff half for a Semi-monthly item.
-  // Guards the one-time migration that halves legacy full-month records exactly once.
-  semiMonthlyHalved?: boolean;
   remarks?: string;
   birVerificationNote?: string;
   categoryTargets: DeMinimisCategoryTarget[];

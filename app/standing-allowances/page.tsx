@@ -57,18 +57,6 @@ function makeAllowanceId() {
   return `standing-allowance-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
 }
 
-// Semi-monthly allowances are entered as the full monthly figure but stored per cutoff (÷2,
-// since the allowance applies on both cutoffs). Halve on save, double back when editing.
-function halveForSemiMonthly(value: number | undefined, frequency: StandingAllowanceFrequency) {
-  if (value === undefined || value === null) return value;
-  return frequency === "Semi-monthly" ? (Number(value) || 0) / 2 : value;
-}
-
-function doubleForSemiMonthly(value: number | undefined, frequency: StandingAllowanceFrequency) {
-  if (value === undefined || value === null) return value;
-  return frequency === "Semi-monthly" ? (Number(value) || 0) * 2 : value;
-}
-
 function emptyDraft(): AllowanceDraft {
   return {
     name: "",
@@ -171,25 +159,7 @@ export default function StandingAllowancesPage() {
         getCollectionItems<StandingAllowance>(storageKeys.standingAllowances),
       ]);
       setEmployees(rawEmployees.filter((employee) => !employee.archived));
-
-      // One-time migration: legacy Semi-monthly records were stored at the full month amount.
-      // Halve them once and tag them so this never runs twice on the same record.
-      const normalized = rawAllowances.map(normalizeAllowance);
-      const migrated = normalized.map((allowance) =>
-        allowance.frequency === "Semi-monthly" && !allowance.semiMonthlyHalved
-          ? {
-              ...allowance,
-              amount: (Number(allowance.amount) || 0) / 2,
-              minAmount: allowance.minAmount === undefined ? undefined : (Number(allowance.minAmount) || 0) / 2,
-              maxAmount: allowance.maxAmount === undefined ? undefined : (Number(allowance.maxAmount) || 0) / 2,
-              semiMonthlyHalved: true,
-            }
-          : allowance
-      );
-      if (JSON.stringify(normalized) !== JSON.stringify(migrated)) {
-        await setCollectionItems(storageKeys.standingAllowances, migrated.map((item) => stripUndefinedAndEmptyStrings(item)));
-      }
-      setAllowances(migrated);
+      setAllowances(rawAllowances.map(normalizeAllowance));
       setLoading(false);
     }
     loadData();
@@ -245,9 +215,9 @@ export default function StandingAllowancesPage() {
     setEditingId(allowance.id);
     setDraft({
       name: allowance.name,
-      amount: doubleForSemiMonthly(allowance.amount, allowance.frequency) ?? 0,
-      minAmount: doubleForSemiMonthly(allowance.minAmount, allowance.frequency),
-      maxAmount: doubleForSemiMonthly(allowance.maxAmount, allowance.frequency),
+      amount: allowance.amount,
+      minAmount: allowance.minAmount,
+      maxAmount: allowance.maxAmount,
       taxable: allowance.taxable,
       applyBeforeTax: allowance.applyBeforeTax,
       frequency: allowance.frequency,
@@ -311,16 +281,9 @@ export default function StandingAllowancesPage() {
     const cleanDraft = stripUndefinedAndEmptyStrings({
       ...draft,
       name: draft.name.trim(),
-      amount: halveForSemiMonthly(Number(draft.amount) || 0, draft.frequency) ?? 0,
-      minAmount:
-        draft.minAmount === undefined || draft.minAmount === null
-          ? undefined
-          : halveForSemiMonthly(Number(draft.minAmount), draft.frequency),
-      maxAmount:
-        draft.maxAmount === undefined || draft.maxAmount === null
-          ? undefined
-          : halveForSemiMonthly(Number(draft.maxAmount), draft.frequency),
-      semiMonthlyHalved: draft.frequency === "Semi-monthly" ? true : undefined,
+      amount: Number(draft.amount) || 0,
+      minAmount: draft.minAmount === undefined || draft.minAmount === null ? undefined : Number(draft.minAmount),
+      maxAmount: draft.maxAmount === undefined || draft.maxAmount === null ? undefined : Number(draft.maxAmount),
       taxable: Boolean(draft.taxable),
       applyBeforeTax: Boolean(draft.applyBeforeTax),
       monthlyCutoff: draft.frequency === "Monthly" ? draft.monthlyCutoff : undefined,
@@ -503,13 +466,11 @@ export default function StandingAllowancesPage() {
                 <input className={inputClassName} value={draft.name} onChange={(event) => setDraft({ ...draft, name: event.target.value })} />
               </label>
               <label className="grid gap-1.5">
-                <span className="text-xs font-black uppercase tracking-wide text-slate-500">Amount</span>
+                <span className="text-xs font-black uppercase tracking-wide text-slate-500">Amount per Cutoff</span>
                 <input type="number" className={inputClassName} value={draft.amount} onChange={(event) => setDraft({ ...draft, amount: Number(event.target.value) })} />
-                {draft.frequency === "Semi-monthly" ? (
-                  <span className="text-xs font-semibold text-slate-500">
-                    Enter the full monthly amount. It will be split as {formatCurrency((Number(draft.amount) || 0) / 2)} per cutoff.
-                  </span>
-                ) : null}
+                <span className="text-xs font-semibold text-slate-500">
+                  Amount applied on each cutoff, exactly as entered. No automatic division.
+                </span>
               </label>
               <label className="grid gap-1.5">
                 <span className="text-xs font-black uppercase tracking-wide text-slate-500">Minimum Amount</span>
