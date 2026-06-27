@@ -1510,9 +1510,17 @@ function PayrollSpreadsheetRow({
   const importedTotalHours = importedAttendance
     ? Math.max(0, (Number(importedAttendance.daysPresent) || 0) * standardHoursPerDay)
     : 0;
+  // Show each worked premium bucket with its peso amount (and hours) right in the table cell, so the
+  // OT/ND/holiday breakdown is visible without opening the drawer.
+  const premiumBucketAmounts = calculated.premiumBucketAmounts || {};
   const importedPremiumLines = Object.entries(importedAttendance?.premiumHours || {})
     .filter(([, hours]) => Number(hours) > 0)
-    .map(([bucket, hours]) => `${bucket}: ${compactHours(Number(hours))} hrs`);
+    .map(([bucket, hours]) => {
+      const peso = Number(premiumBucketAmounts[bucket]) || 0;
+      return peso > 0
+        ? `${bucket}: ${formatCurrency(peso)} (${compactHours(Number(hours))} hrs)`
+        : `${bucket}: ${compactHours(Number(hours))} hrs`;
+    });
 
   return (
     <tr data-readonly={readOnly ? "true" : undefined} className="transition hover:bg-sky-50/40">
