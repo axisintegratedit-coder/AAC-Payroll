@@ -15,6 +15,9 @@ export type StandingAllowance = {
   applyBeforeTax: boolean;
   frequency: StandingAllowanceFrequency;
   monthlyCutoff?: StandingAllowanceCutoffSlot;
+  // True once `amount` has been stored as the per-cutoff half for a Semi-monthly item.
+  // Guards the one-time migration that halves legacy full-month records exactly once.
+  semiMonthlyHalved?: boolean;
   remarks?: string;
   categoryTargets: StandingAllowanceCategoryTarget[];
   employeeTargets: string[];

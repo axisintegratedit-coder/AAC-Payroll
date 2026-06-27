@@ -247,7 +247,29 @@ export default function DeMinimisPage() {
       }
 
       setEmployees(migratedEmployees.filter((employee) => !employee.archived));
-      setBenefits(seededBenefits.map(normalizeBenefit));
+
+      // One-time migration: legacy Semi-monthly benefits were stored at the full month amount.
+      // Halve them once and tag them so this never runs twice on the same record.
+      const normalizedBenefits = seededBenefits.map(normalizeBenefit);
+      const migratedBenefits = normalizedBenefits.map((benefit) =>
+        benefit.frequency === "Semi-monthly" && !benefit.semiMonthlyHalved
+          ? {
+              ...benefit,
+              amount: (Number(benefit.amount) || 0) / 2,
+              minAmount: benefit.minAmount === undefined ? undefined : (Number(benefit.minAmount) || 0) / 2,
+              maxAmount: benefit.maxAmount === undefined ? undefined : (Number(benefit.maxAmount) || 0) / 2,
+              semiMonthlyHalved: true,
+            }
+          : benefit
+      );
+      if (JSON.stringify(normalizedBenefits) !== JSON.stringify(migratedBenefits)) {
+        await setCollectionItems(
+          storageKeys.deMinimisBenefits,
+          migratedBenefits.map((benefit) => stripUndefinedAndEmptyStrings(benefit))
+        );
+        window.dispatchEvent(new Event("de-minimis-benefits-updated"));
+      }
+      setBenefits(migratedBenefits);
       setLoading(false);
     }
     loadData();
@@ -436,6 +458,7 @@ export default function DeMinimisPage() {
         draft.maxAmount === undefined || draft.maxAmount === null
           ? undefined
           : halveForSemiMonthly(Number(draft.maxAmount), draft.frequency),
+      semiMonthlyHalved: draft.frequency === "Semi-monthly" ? true : undefined,
       hasOwnCeiling: Boolean(draft.hasOwnCeiling),
       ceiling: draft.hasOwnCeiling ? Number(draft.ceiling) || 0 : undefined,
       monthlyCutoff: draft.frequency === "Monthly" ? draft.monthlyCutoff : undefined,

@@ -171,7 +171,25 @@ export default function StandingAllowancesPage() {
         getCollectionItems<StandingAllowance>(storageKeys.standingAllowances),
       ]);
       setEmployees(rawEmployees.filter((employee) => !employee.archived));
-      setAllowances(rawAllowances.map(normalizeAllowance));
+
+      // One-time migration: legacy Semi-monthly records were stored at the full month amount.
+      // Halve them once and tag them so this never runs twice on the same record.
+      const normalized = rawAllowances.map(normalizeAllowance);
+      const migrated = normalized.map((allowance) =>
+        allowance.frequency === "Semi-monthly" && !allowance.semiMonthlyHalved
+          ? {
+              ...allowance,
+              amount: (Number(allowance.amount) || 0) / 2,
+              minAmount: allowance.minAmount === undefined ? undefined : (Number(allowance.minAmount) || 0) / 2,
+              maxAmount: allowance.maxAmount === undefined ? undefined : (Number(allowance.maxAmount) || 0) / 2,
+              semiMonthlyHalved: true,
+            }
+          : allowance
+      );
+      if (JSON.stringify(normalized) !== JSON.stringify(migrated)) {
+        await setCollectionItems(storageKeys.standingAllowances, migrated.map((item) => stripUndefinedAndEmptyStrings(item)));
+      }
+      setAllowances(migrated);
       setLoading(false);
     }
     loadData();
@@ -302,6 +320,7 @@ export default function StandingAllowancesPage() {
         draft.maxAmount === undefined || draft.maxAmount === null
           ? undefined
           : halveForSemiMonthly(Number(draft.maxAmount), draft.frequency),
+      semiMonthlyHalved: draft.frequency === "Semi-monthly" ? true : undefined,
       taxable: Boolean(draft.taxable),
       applyBeforeTax: Boolean(draft.applyBeforeTax),
       monthlyCutoff: draft.frequency === "Monthly" ? draft.monthlyCutoff : undefined,
