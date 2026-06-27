@@ -1632,7 +1632,7 @@ function PayrollSpreadsheetRow({
       {PREMIUM_BUCKET_ORDER.map((bucket) => {
         const peso = Number(premiumBucketAmounts[bucket]) || 0;
         return (
-          <td key={bucket} style={{ ...spreadsheetCellStyle, minWidth: 96 }}>
+          <td key={bucket} style={{ ...spreadsheetCellStyle, width: 120, minWidth: 120 }}>
             <div className={`text-right text-sm font-semibold tabular-nums ${peso > 0 ? "text-slate-900" : "text-slate-300"}`}>
               {peso > 0 ? formatCurrency(peso) : "—"}
             </div>
@@ -4273,7 +4273,7 @@ function AddPayrollPageInner() {
                 Click a category card to edit details. Amount edits still prompt for employee, department, classification, type, or MWE scope.
               </div>
               <div className="w-full max-w-full overflow-x-auto rounded-2xl border border-slate-200 bg-white shadow-[0_18px_48px_-34px_rgba(8,47,73,0.75)]">
-                <table className="w-full min-w-[1740px] table-fixed border-separate border-spacing-0">
+                <table className="w-full min-w-[5600px] table-fixed border-separate border-spacing-0">
                   <thead>
                     <tr>
                       <th style={spreadsheetHeaderStyle}>Employee</th>
@@ -4282,7 +4282,7 @@ function AddPayrollPageInner() {
                       <th style={{ ...spreadsheetHeaderStyle, width: 140 }}>Basic Pay</th>
                       <th style={spreadsheetHeaderStyle}>Premiums</th>
                       {PREMIUM_BUCKET_ORDER.map((bucket) => (
-                        <th key={bucket} style={{ ...spreadsheetHeaderStyle, minWidth: 96, whiteSpace: "nowrap" }}>{bucket} (₱)</th>
+                        <th key={bucket} style={{ ...spreadsheetHeaderStyle, width: 120, minWidth: 120, whiteSpace: "nowrap" }}>{bucket} (₱)</th>
                       ))}
                       <th style={spreadsheetHeaderStyle}>Allowances</th>
                       <th style={spreadsheetHeaderStyle}>Gov&apos;t</th>
