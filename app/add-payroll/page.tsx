@@ -50,7 +50,7 @@ import { applyLoanDeductionsToBalances, stripUndefinedAndEmptyStrings, type Loan
 import { type DetailedRecord } from "@/lib/payrollExcel";
 import DetailedPayrollRegister from "@/app/components/DetailedPayrollRegister";
 import { SEED_CUTOFF_DEFINITIONS, SEED_PREMIUM_MULTIPLIERS, type CutoffDefinition, type PremiumMultipliersConfig } from "@/lib/payrollSettingsTypes";
-import { computePremiumBucketAmounts } from "@/lib/premiumBuckets";
+import { computePremiumBucketAmounts, PREMIUM_BUCKET_ORDER } from "@/lib/premiumBuckets";
 import { normalizeSalaryHistory, type SalaryHistoryEntry } from "@/lib/salaryHistory";
 
 import {
@@ -1628,6 +1628,17 @@ function PayrollSpreadsheetRow({
       <td style={spreadsheetCellStyle}>
         <PayrollSummaryCell title="Premiums" amount={calculated.totalPayrollPremium} activeCount={premiumActiveCount} importedLines={importedPremiumLines} customCount={premiumColumns.length} icon={<Clock className="h-4 w-4" aria-hidden="true" />} review={readNumber(row.absencesHours) > 0} onClick={() => onOpenDrawer("premium")} />
       </td>
+
+      {PREMIUM_BUCKET_ORDER.map((bucket) => {
+        const peso = Number(premiumBucketAmounts[bucket]) || 0;
+        return (
+          <td key={bucket} style={{ ...spreadsheetCellStyle, minWidth: 96 }}>
+            <div className={`text-right text-sm font-semibold tabular-nums ${peso > 0 ? "text-slate-900" : "text-slate-300"}`}>
+              {peso > 0 ? formatCurrency(peso) : "—"}
+            </div>
+          </td>
+        );
+      })}
 
       <td style={spreadsheetCellStyle}>
         <PayrollSummaryCell title="Allowances" amount={standingAllowanceTotal} activeCount={allowanceActiveCount} importedLines={standingAllowanceSummaryLines} icon={<Gift className="h-4 w-4" aria-hidden="true" />} onClick={() => onOpenDrawer("allowance")} />
@@ -4270,6 +4281,9 @@ function AddPayrollPageInner() {
                       <th style={{ ...spreadsheetHeaderStyle, width: 260 }}>Attendance</th>
                       <th style={{ ...spreadsheetHeaderStyle, width: 140 }}>Basic Pay</th>
                       <th style={spreadsheetHeaderStyle}>Premiums</th>
+                      {PREMIUM_BUCKET_ORDER.map((bucket) => (
+                        <th key={bucket} style={{ ...spreadsheetHeaderStyle, minWidth: 96, whiteSpace: "nowrap" }}>{bucket} (₱)</th>
+                      ))}
                       <th style={spreadsheetHeaderStyle}>Allowances</th>
                       <th style={spreadsheetHeaderStyle}>Gov&apos;t</th>
                       <th style={spreadsheetHeaderStyle}>Other / Tax</th>
