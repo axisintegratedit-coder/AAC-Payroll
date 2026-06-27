@@ -365,7 +365,8 @@ type Calculation = {
   restDayAmount: number;
   specialHolidayAmount: number;
   totalPayrollPremium: number;
-  // Per-bucket premium PESO amounts (columns L–AP). Display/export only; not part of any total.
+  // Per-bucket premium PESO amounts (columns L–AP). When present these are the basis paid into
+  // totalPayrollPremium (and thus gross); otherwise the simplified 4-field amounts are used.
   premiumBucketAmounts: Record<string, number>;
   totalAllowances: number;
   totalAbsences: number;
@@ -2603,10 +2604,16 @@ function AddPayrollPageInner() {
     const restDayAmount = readNumber(row.restDayHours) * hourlyRate * 1.3;
     const specialHolidayAmount = readNumber(row.specialHolidayHours) * hourlyRate * 1.3;
     const customPremiumsTotal = Object.values(row.customPremiumValues || {}).reduce((sum, value) => sum + readNumber(value), 0);
-    const totalPayrollPremium = nightDifferentialAmount + overtimeAmount + restDayAmount + specialHolidayAmount + customPremiumsTotal;
-    // Per-bucket premium pesos (columns L–AP). Display/export only — NOT added to totalPayrollPremium,
-    // gross, or tax, which keep their existing simplified computation above.
+    // Per-bucket premium pesos (columns L–AP) = bucketHours × hourlyRate × DOLE finalMultiplier.
     const premiumBucketAmounts = computePremiumBucketAmounts(inputs.importedAttendance?.premiumHours, hourlyRate, premiumMultipliers);
+    const premiumBucketTotal = Object.values(premiumBucketAmounts).reduce((sum, amount) => sum + (Number(amount) || 0), 0);
+    // Premiums are PAID from the detailed 31-bucket sum when the upload provided granular buckets
+    // (Sprout attendance); otherwise fall back to the simplified 4-field amounts (manual workbook),
+    // so both upload formats keep paying premiums. Either way custom premiums are added on top.
+    const premiumBasis = premiumBucketTotal > 0
+      ? premiumBucketTotal
+      : nightDifferentialAmount + overtimeAmount + restDayAmount + specialHolidayAmount;
+    const totalPayrollPremium = premiumBasis + customPremiumsTotal;
     const totalAbsences = fullBasicPay - basicPay;
 
     // Allowances are stored at their FULL (unadjusted) value; for Payroll Type B the whole allowance

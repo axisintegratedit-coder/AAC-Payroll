@@ -144,8 +144,9 @@ export function earningBands(cn: CustomNames): EarningBand[] {
   return [
     { label: "BASIC PAY", fg: "FF1E5F3A", bg: "FFD7ECD9", cols: ["Basic Pay (Original)", "Basic Pay (After Absences)"] },
     { label: "PREMIUMS", fg: "FF1E3A5F", bg: "FFDCE6F4", cols: ["Night Differential", "Overtime", "Rest Day", "Special Holiday", ...cn.premiums, "Total Premiums"] },
-    // Granular per-bucket premium pesos (columns L–AP from the Sprout attendance upload). These are
-    // a reference breakdown only — intentionally NOT summed into Total Premiums above.
+    // Granular per-bucket premium pesos (columns L–AP from the Sprout attendance upload). When present
+    // these ARE what Total Premiums is paid from (DOLE multipliers); shown here as the detailed
+    // breakdown. Kept in their own band so the PREMIUMS subtotal stays a clean 4-field summary.
     { label: "PREMIUM BREAKDOWN (₱)", fg: "FF1E3A5F", bg: "FFEAF1FA", cols: [...PREMIUM_BUCKET_COLUMN_HEADERS] },
     { label: "ALLOWANCES & DE MINIMIS", fg: "FF6B4E16", bg: "FFFBF0D5", cols: [
       "Rice Subsidy", "Uniform/Clothing", "Laundry Allowance", "Medical Cash (Deps)",
@@ -251,7 +252,10 @@ export function computeDetailedRowValues(
   const basicOriginal = basicAfterAbsences + absenceDeduction;
 
   const premiumFixed = m(r.nightDifferentialAmount) + m(r.overtimeAmount) + m(r.restDayAmount) + m(r.specialHolidayAmount);
-  const totalPremiums = premiumFixed + cpV.reduce((s, v) => s + v, 0);
+  // Mirror calculateRow: premiums are paid from the detailed 31-bucket sum when present, else the
+  // simplified 4-field amounts. Custom premiums are always added on top.
+  const premiumBucketTotal = premiumBucketAmountsToRow(r.premiumBucketAmounts).reduce((s, v) => s + v, 0);
+  const totalPremiums = (premiumBucketTotal > 0 ? premiumBucketTotal : premiumFixed) + cpV.reduce((s, v) => s + v, 0);
   const allowanceFixed =
     m(r.riceSubsidy) + m(r.uniformClothing) + m(r.laundryAllowance) + m(r.medicalCashDependents) +
     m(r.actualMedicalAssistance) + m(r.achievementAwards) + m(r.christmasAnniversaryGifts) +

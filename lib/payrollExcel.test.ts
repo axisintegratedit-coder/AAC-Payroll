@@ -145,10 +145,11 @@ describe("payrollExcel sheet build", () => {
     }
   });
 
-  it("emits the 31 per-bucket premium peso columns (L–AP) without affecting Total Premiums", () => {
+  it("emits the 31 per-bucket premium peso columns (L–AP) and pays Total Premiums from them", () => {
     const rec: DetailedRecord = {
       ...recordWithExtras,
-      totalPayrollPremium: 0,
+      // No custom premiums on the base record; bucket sum is what should be paid.
+      nightDifferentialAmount: 0, overtimeAmount: 0, restDayAmount: 0, specialHolidayAmount: 0,
       premiumBucketAmounts: { "Ord-OT": 1250, "RD-ND-OT": 845 },
     };
     const cn = collectCustomNames([rec]);
@@ -156,14 +157,27 @@ describe("payrollExcel sheet build", () => {
     const values = computeDetailedRowValues(rec, cn, 0, "15th", "2026-12-15");
     expect(values.length).toBe(headers.length);
 
-    // The granular bucket columns carry the per-bucket pesos...
     const idx = (name: string) => headers.indexOf(name);
+    // The granular bucket columns carry the per-bucket pesos...
     expect(headers).toContain("Ord-OT (₱)");
     expect(headers).toContain("DH-RD-ND-OT (₱)");
     expect(values[idx("Ord-OT (₱)")]).toBe(1250);
     expect(values[idx("RD-ND-OT (₱)")]).toBe(845);
-    // ...but Total Premiums stays at its independently-computed value (display-only buckets).
-    expect(values[idx("Total Premiums")]).toBe(0);
+    // ...and Total Premiums is now PAID from the detailed bucket sum (1250 + 845).
+    expect(values[idx("Total Premiums")]).toBe(2095);
+  });
+
+  it("falls back to the simplified 4-field premiums when no buckets are present", () => {
+    const rec: DetailedRecord = {
+      ...recordWithExtras,
+      nightDifferentialAmount: 100, overtimeAmount: 200, restDayAmount: 0, specialHolidayAmount: 0,
+      // no premiumBucketAmounts
+    };
+    const cn = collectCustomNames([rec]);
+    const headers = detailedHeaders(cn);
+    const values = computeDetailedRowValues(rec, cn, 0, "15th", "2026-12-15");
+    const idx = (name: string) => headers.indexOf(name);
+    expect(values[idx("Total Premiums")]).toBe(300);
   });
 
   it("draws coloured earnings sub-band banners (basic / premiums / allowances)", async () => {
