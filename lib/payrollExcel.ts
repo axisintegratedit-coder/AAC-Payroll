@@ -1,4 +1,5 @@
 import type ExcelJS from "exceljs";
+import { PREMIUM_BUCKET_COLUMN_HEADERS, premiumBucketAmountsToRow } from "./premiumBuckets";
 
 export type DetailedRecord = {
   id?: string;
@@ -21,6 +22,7 @@ export type DetailedRecord = {
   restDayAmount?: number | string;
   specialHolidayAmount?: number | string;
   customPremiums?: { name: string; amount?: number | string }[];
+  premiumBucketAmounts?: Record<string, number>;
   totalPayrollPremium?: number | string;
   riceSubsidy?: number | string;
   uniformClothing?: number | string;
@@ -142,6 +144,9 @@ export function earningBands(cn: CustomNames): EarningBand[] {
   return [
     { label: "BASIC PAY", fg: "FF1E5F3A", bg: "FFD7ECD9", cols: ["Basic Pay (Original)", "Basic Pay (After Absences)"] },
     { label: "PREMIUMS", fg: "FF1E3A5F", bg: "FFDCE6F4", cols: ["Night Differential", "Overtime", "Rest Day", "Special Holiday", ...cn.premiums, "Total Premiums"] },
+    // Granular per-bucket premium pesos (columns L–AP from the Sprout attendance upload). These are
+    // a reference breakdown only — intentionally NOT summed into Total Premiums above.
+    { label: "PREMIUM BREAKDOWN (₱)", fg: "FF1E3A5F", bg: "FFEAF1FA", cols: [...PREMIUM_BUCKET_COLUMN_HEADERS] },
     { label: "ALLOWANCES & DE MINIMIS", fg: "FF6B4E16", bg: "FFFBF0D5", cols: [
       "Rice Subsidy", "Uniform/Clothing", "Laundry Allowance", "Medical Cash (Deps)",
       "Actual Medical Assist.", "Achievement Awards", "Christmas/Anniv. Gifts",
@@ -280,6 +285,7 @@ export function computeDetailedRowValues(
     daysAbsent, hrsAbsent, absenceDeduction,
     basicOriginal, basicAfterAbsences, m(r.nightDifferentialAmount), m(r.overtimeAmount), m(r.restDayAmount), m(r.specialHolidayAmount),
     ...cpV, totalPremiums,
+    ...premiumBucketAmountsToRow(r.premiumBucketAmounts),
     m(r.riceSubsidy), m(r.uniformClothing), m(r.laundryAllowance), m(r.medicalCashDependents),
     m(r.actualMedicalAssistance), m(r.achievementAwards), m(r.christmasAnniversaryGifts),
     m(r.mealAllowanceOTNight), m(r.monetizedLeavePrivate), m(r.cbaProductivityIncentives),

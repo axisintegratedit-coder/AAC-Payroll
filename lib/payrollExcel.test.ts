@@ -145,6 +145,27 @@ describe("payrollExcel sheet build", () => {
     }
   });
 
+  it("emits the 31 per-bucket premium peso columns (L–AP) without affecting Total Premiums", () => {
+    const rec: DetailedRecord = {
+      ...recordWithExtras,
+      totalPayrollPremium: 0,
+      premiumBucketAmounts: { "Ord-OT": 1250, "RD-ND-OT": 845 },
+    };
+    const cn = collectCustomNames([rec]);
+    const headers = detailedHeaders(cn);
+    const values = computeDetailedRowValues(rec, cn, 0, "15th", "2026-12-15");
+    expect(values.length).toBe(headers.length);
+
+    // The granular bucket columns carry the per-bucket pesos...
+    const idx = (name: string) => headers.indexOf(name);
+    expect(headers).toContain("Ord-OT (₱)");
+    expect(headers).toContain("DH-RD-ND-OT (₱)");
+    expect(values[idx("Ord-OT (₱)")]).toBe(1250);
+    expect(values[idx("RD-ND-OT (₱)")]).toBe(845);
+    // ...but Total Premiums stays at its independently-computed value (display-only buckets).
+    expect(values[idx("Total Premiums")]).toBe(0);
+  });
+
   it("draws coloured earnings sub-band banners (basic / premiums / allowances)", async () => {
     const wb = new ExcelJS.Workbook();
     const ws = wb.addWorksheet("Test");

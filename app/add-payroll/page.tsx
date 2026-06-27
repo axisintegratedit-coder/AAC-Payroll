@@ -49,7 +49,8 @@ import type { StandingAllowance, StandingAllowanceLine } from "@/lib/standingAll
 import { applyLoanDeductionsToBalances, stripUndefinedAndEmptyStrings, type LoanDeductionLine, type PayrollLoanRecord } from "@/lib/loans";
 import { type DetailedRecord } from "@/lib/payrollExcel";
 import DetailedPayrollRegister from "@/app/components/DetailedPayrollRegister";
-import { SEED_CUTOFF_DEFINITIONS, type CutoffDefinition } from "@/lib/payrollSettingsTypes";
+import { SEED_CUTOFF_DEFINITIONS, SEED_PREMIUM_MULTIPLIERS, type CutoffDefinition, type PremiumMultipliersConfig } from "@/lib/payrollSettingsTypes";
+import { computePremiumBucketAmounts } from "@/lib/premiumBuckets";
 import { normalizeSalaryHistory, type SalaryHistoryEntry } from "@/lib/salaryHistory";
 
 import {
@@ -174,6 +175,7 @@ type SavedPayrollRecord = {
   netPay: number;
   basicPay: number;
   totalPayrollPremium: number;
+  premiumBucketAmounts?: Record<string, number>;
   totalAllowances: number;
   totalAbsences: number;
   allowanceProrationDeduction?: number;
@@ -363,6 +365,8 @@ type Calculation = {
   restDayAmount: number;
   specialHolidayAmount: number;
   totalPayrollPremium: number;
+  // Per-bucket premium PESO amounts (columns L–AP). Display/export only; not part of any total.
+  premiumBucketAmounts: Record<string, number>;
   totalAllowances: number;
   totalAbsences: number;
   allowanceProrationDeduction: number;
@@ -1277,6 +1281,18 @@ function PayrollDetailDrawer({
                   ))
                 )}
               </DetailSection>
+              <DetailSection title="Premium Buckets (₱)">
+                {(() => {
+                  const bucketPesoLines = Object.entries(calculated.premiumBucketAmounts || {}).filter(([, amount]) => Number(amount) > 0);
+                  return bucketPesoLines.length === 0 ? (
+                    <EmptySourceRow label="No premium-bucket amounts for this employee" />
+                  ) : (
+                    bucketPesoLines.map(([bucket, amount]) => (
+                      <ReadOnlyMoneyRow key={bucket} label={bucket} amount={Number(amount) || 0} />
+                    ))
+                  );
+                })()}
+              </DetailSection>
               <DetailSection title="Absences">
                 <ReadOnlyValueRow label="Absences hrs" value={`${compactHours(importedAbsenceHours)} hrs`}>
                   <StatusBadge tone={importedAbsenceHours > 0 ? "amber" : "emerald"}>
@@ -1683,6 +1699,7 @@ function AddPayrollPageInner() {
   const [deMinimisBenefits, setDeMinimisBenefits] = useState<DeMinimisBenefit[]>([]);
   const [standingAllowances, setStandingAllowances] = useState<StandingAllowance[]>([]);
   const [payrollLoans, setPayrollLoans] = useState<PayrollLoanRecord[]>([]);
+  const [premiumMultipliers, setPremiumMultipliers] = useState<PremiumMultipliersConfig>(SEED_PREMIUM_MULTIPLIERS);
   const [theme, setTheme] = useState<Partial<AppTheme>>(DEFAULT_APP_THEME);
   const [hasSpecialItemsThisCutoff, setHasSpecialItemsThisCutoff] = useState(false);
   const [specialItemsDecisionMade, setSpecialItemsDecisionMade] = useState(false);
@@ -2026,7 +2043,7 @@ function AddPayrollPageInner() {
 
   useEffect(() => {
     async function loadInitialData() {
-      const [rawEmployees, records, adjustments, appliedAdjustmentIds, savedDeMinimisBenefits, savedStandingAllowances, savedPayrollLoans] = await Promise.all([
+      const [rawEmployees, records, adjustments, appliedAdjustmentIds, savedDeMinimisBenefits, savedStandingAllowances, savedPayrollLoans, savedPremiumMultipliers] = await Promise.all([
         getCollectionItems<SavedEmployeeRecord>(storageKeys.employees),
         getCollectionItems<SavedPayrollRecord>(storageKeys.payrollRecords),
         getDataArray<PayrollAdjustmentRecord>(storageKeys.payrollAdjustments, []),
@@ -2034,7 +2051,9 @@ function AddPayrollPageInner() {
         getCollectionItems<DeMinimisBenefit>(storageKeys.deMinimisBenefits),
         getCollectionItems<StandingAllowance>(storageKeys.standingAllowances),
         getCollectionItems<PayrollLoanRecord>(storageKeys.payrollLoans),
+        getConfigItem<PremiumMultipliersConfig>(storageKeys.premiumMultipliers, SEED_PREMIUM_MULTIPLIERS),
       ]);
+      setPremiumMultipliers(savedPremiumMultipliers?.rows?.length ? savedPremiumMultipliers : SEED_PREMIUM_MULTIPLIERS);
       const mappedEmployees = rawEmployees
         .filter((employee) => !employee.archived)
         .map((employee) => ({
@@ -2194,6 +2213,7 @@ function AddPayrollPageInner() {
             restDayAmount: num(record.restDayAmount),
             specialHolidayAmount: num(record.specialHolidayAmount),
             totalPayrollPremium: num(record.totalPayrollPremium),
+            premiumBucketAmounts: record.premiumBucketAmounts || {},
             totalAllowances: num(record.totalAllowances),
             allowanceProrationDeduction: num(record.allowanceProrationDeduction),
             totalAbsences: num(record.totalAbsences),
@@ -2552,6 +2572,7 @@ function AddPayrollPageInner() {
         restDayAmount: 0,
         specialHolidayAmount: 0,
         totalPayrollPremium: 0,
+        premiumBucketAmounts: {},
         totalAllowances: 0,
         totalAbsences: 0,
         allowanceProrationDeduction: 0,
@@ -2583,6 +2604,9 @@ function AddPayrollPageInner() {
     const specialHolidayAmount = readNumber(row.specialHolidayHours) * hourlyRate * 1.3;
     const customPremiumsTotal = Object.values(row.customPremiumValues || {}).reduce((sum, value) => sum + readNumber(value), 0);
     const totalPayrollPremium = nightDifferentialAmount + overtimeAmount + restDayAmount + specialHolidayAmount + customPremiumsTotal;
+    // Per-bucket premium pesos (columns L–AP). Display/export only — NOT added to totalPayrollPremium,
+    // gross, or tax, which keep their existing simplified computation above.
+    const premiumBucketAmounts = computePremiumBucketAmounts(inputs.importedAttendance?.premiumHours, hourlyRate, premiumMultipliers);
     const totalAbsences = fullBasicPay - basicPay;
 
     // Allowances are stored at their FULL (unadjusted) value; for Payroll Type B the whole allowance
@@ -2641,6 +2665,7 @@ function AddPayrollPageInner() {
       restDayAmount,
       specialHolidayAmount,
       totalPayrollPremium,
+      premiumBucketAmounts,
       totalAllowances,
       totalAbsences,
       allowanceProrationDeduction,
@@ -3346,6 +3371,7 @@ function AddPayrollPageInner() {
           overtimeAmount: calculated.overtimeAmount,
           restDayAmount: calculated.restDayAmount,
           specialHolidayAmount: calculated.specialHolidayAmount,
+          premiumBucketAmounts: calculated.premiumBucketAmounts,
           nonTaxableDMB: calculated.nonTaxableDMB,
           excessDMBTo90k: calculated.excessDMBTo90k,
           taxableDMBAfter90k: calculated.taxableDMBAfter90k,
