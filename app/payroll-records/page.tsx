@@ -1859,6 +1859,9 @@ function PayrollRecordsPageInner() {
       title: payrollRun.title,
       payrollDate: payrollRun.payrollDate,
       createdAt: payrollRun.createdAt,
+      // Draft runs are recomputed live from current premium multipliers in the viewer; finalized
+      // runs (Submitted/Approved/etc.) always show their saved snapshot.
+      status: getPayrollRunApproval(payrollRun).status,
       records: payrollRun.records,
     });
     router.push("/add-payroll?mode=view-payroll-run");

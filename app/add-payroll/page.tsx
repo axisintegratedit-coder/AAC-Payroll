@@ -265,6 +265,7 @@ type ReadonlyPayrollRunView = {
   title: string;
   payrollDate?: string;
   createdAt?: string;
+  status?: string;
   records: SavedPayrollRecord[];
 };
 
@@ -1694,6 +1695,7 @@ function AddPayrollPageInner() {
   const [allowanceToRemove, setAllowanceToRemove] = useState<StandardAllowanceField>("christmasBonus");
   const [removeAllowanceScope, setRemoveAllowanceScope] = useState<Exclude<Scope, "single">>("all");
   const [removeAllowanceScopeValue, setRemoveAllowanceScopeValue] = useState("");
+  const [readonlyRunIsDraft, setReadonlyRunIsDraft] = useState(false);
   const [showCsvGuide, setShowCsvGuide] = useState(false);
   const [showEditColumns, setShowEditColumns] = useState(false);
   const [showLoadPanel, setShowLoadPanel] = useState(false);
@@ -1748,6 +1750,19 @@ function AddPayrollPageInner() {
     window.addEventListener(`${storageKeys.appTheme}-updated`, loadTheme as EventListener);
     return () => {
       window.removeEventListener(`${storageKeys.appTheme}-updated`, loadTheme as EventListener);
+    };
+  }, []);
+
+  // Keep premium multipliers in sync: when the Premium Multiplier Table is saved in Settings, the
+  // editable grid recomputes live (calculateRow reads premiumMultipliers), so open drafts update.
+  useEffect(() => {
+    async function loadPremiumMultipliers() {
+      const saved = await getConfigItem<PremiumMultipliersConfig>(storageKeys.premiumMultipliers, SEED_PREMIUM_MULTIPLIERS);
+      setPremiumMultipliers(saved?.rows?.length ? saved : SEED_PREMIUM_MULTIPLIERS);
+    }
+    window.addEventListener(`${storageKeys.premiumMultipliers}-updated`, loadPremiumMultipliers as EventListener);
+    return () => {
+      window.removeEventListener(`${storageKeys.premiumMultipliers}-updated`, loadPremiumMultipliers as EventListener);
     };
   }, []);
 
@@ -2144,6 +2159,8 @@ function AddPayrollPageInner() {
     async function loadReadonlyRun() {
       const readonlyRun = await getConfigItem<ReadonlyPayrollRunView | null>("readonlyPayrollRunView", null);
       if (!readonlyRun || !Array.isArray(readonlyRun.records)) return;
+      // Only Draft runs recompute premiums live from current multipliers; finalized runs are frozen.
+      setReadonlyRunIsDraft((readonlyRun.status || "Draft") === "Draft");
 
       const readonlyRows = readonlyRun.records.map((record, index) => {
         const rawRecord = record;
@@ -2335,7 +2352,21 @@ function AddPayrollPageInner() {
   ): Calculation => {
     if (isReadonlyPayrollRunView) {
       const saved = readonlySavedById[row.id];
-      if (saved) return saved.calculation;
+      if (saved) {
+        // Draft runs recompute live so premium-multiplier changes (and other catalog edits) flow
+        // through the REAL engine (calculateRow) — same math as building a run, incl. non-linear tax.
+        // Finalized runs keep their frozen saved snapshot.
+        if (!readonlyRunIsDraft) return saved.calculation;
+        const recomputeEmployee = employee ? { ...employee, basicPay: saved.adjustedBase || employee.basicPay } : employee;
+        return calculateRow(recomputeEmployee, row, {
+          standingAllowanceLines: saved.standingAllowanceLines,
+          deMinimisLines: saved.deMinimisLines,
+          loanDeductions: saved.loanDeductions,
+          oneTimeCredits: saved.oneTimeCredits,
+          oneTimeDeductions: saved.oneTimeDeductions,
+          importedAttendance: saved.importedAttendance,
+        });
+      }
     }
     const importedAttendance = employee ? attendanceByEmployeeId.get(normalizeEmployeeId(employee.employeeNo)) : undefined;
     return calculateRow(
@@ -2351,6 +2382,36 @@ function AddPayrollPageInner() {
       } : { importedAttendance }
     );
   };
+
+  // For the detailed register in view mode: when the run is a Draft, overlay each saved record with
+  // its live-recomputed premium/gross/tax/net (so multiplier changes show in the register too).
+  // Finalized runs pass through their saved snapshot unchanged.
+  const detailedRegisterRecords = useMemo<SavedPayrollRecord[]>(() => {
+    if (!isReadonlyPayrollRunView || !readonlyRunIsDraft) return readonlyRunRecords;
+    const rowById = new Map(bulkRows.map((row) => [row.id, row]));
+    return readonlyRunRecords.map((record) => {
+      const row = rowById.get(record.id);
+      const employee = row ? getEmployeeByNo(row.employeeNo) : null;
+      if (!row || !employee) return record;
+      const calc = resolveRowCalculation(row, employee, null);
+      return {
+        ...record,
+        totalPayrollPremium: calc.totalPayrollPremium,
+        premiumBucketAmounts: calc.premiumBucketAmounts,
+        nightDifferentialAmount: calc.nightDifferentialAmount,
+        overtimeAmount: calc.overtimeAmount,
+        restDayAmount: calc.restDayAmount,
+        specialHolidayAmount: calc.specialHolidayAmount,
+        totalAllowances: calc.totalAllowances,
+        grossPay: calc.grossPay,
+        taxableIncome: calc.taxableIncome,
+        withholdingTax: calc.withholdingTax,
+        totalDeductions: calc.totalDeductions,
+        netPay: calc.netPay,
+      };
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isReadonlyPayrollRunView, readonlyRunIsDraft, readonlyRunRecords, bulkRows, employees, premiumMultipliers]);
 
   const formatValidationErrors = (errors: ValidationError[]) =>
     errors.map((error) => `${error.sheet} row ${error.row}, ${error.field}: ${error.message}`).join("\n");
@@ -3973,7 +4034,7 @@ function AddPayrollPageInner() {
             </div>
             {readonlyRunRecords.length > 0 ? (
               <DetailedPayrollRegister
-                records={readonlyRunRecords as unknown as DetailedRecord[]}
+                records={detailedRegisterRecords as unknown as DetailedRecord[]}
                 period={readonlyRunMeta.period}
                 payDate={readonlyRunMeta.payDate}
               />
