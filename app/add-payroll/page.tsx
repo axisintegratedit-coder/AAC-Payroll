@@ -283,8 +283,10 @@ type PayrollAdjustmentRecord = {
   sourceId?: string | number;
   payrollReference?: string;
   adjustmentCategory?: string;
+  adjustmentType?: string;
   source?: string;
   amount?: string | number;
+  netPayEffect?: string | number; // signed (negative for deductions)
   employeeId?: string | number;
   employeeNo?: string | number;
 };
@@ -1356,14 +1358,20 @@ function PayrollDetailDrawer({
           ) : null}
 
           {category === "govt" ? (
-            <DetailSection title="Contributions">
-              <AmountInputRow label="SSS EE" value={row.sssEe} onChange={(value) => onChange("sssEe", value)} />
-              <AmountInputRow label="SSS ER" value={row.sssEr} onChange={(value) => onChange("sssEr", value)} />
-              <AmountInputRow label="PhilHealth EE" value={row.philhealthEe} onChange={(value) => onChange("philhealthEe", value)} />
-              <AmountInputRow label="PhilHealth ER" value={row.philhealthEr} onChange={(value) => onChange("philhealthEr", value)} />
-              <AmountInputRow label="Pag-IBIG EE" value={row.pagibigEe} onChange={(value) => onChange("pagibigEe", value)} />
-              <AmountInputRow label="Pag-IBIG ER" value={row.pagibigEr} onChange={(value) => onChange("pagibigEr", value)} />
-            </DetailSection>
+            <>
+              <DetailSection title="Employee Share — Boldr Statutory Engine">
+                <ReadOnlyMoneyRow label="SSS EE (5% of MSC)" amount={calculated.statutorySssEe}>
+                  <StatusBadge>MSC {formatCurrency(calculated.statutorySssMsc)}</StatusBadge>
+                </ReadOnlyMoneyRow>
+                <ReadOnlyMoneyRow label="PhilHealth EE (2.5% of gross basic)" amount={calculated.statutoryPhilhealthEe} />
+                <ReadOnlyMoneyRow label="Pag-IBIG EE (flat)" amount={calculated.statutoryPagibigEe} />
+              </DetailSection>
+              <DetailSection title="Employer Share (editable)">
+                <AmountInputRow label="SSS ER" value={row.sssEr} onChange={(value) => onChange("sssEr", value)} />
+                <AmountInputRow label="PhilHealth ER" value={row.philhealthEr} onChange={(value) => onChange("philhealthEr", value)} />
+                <AmountInputRow label="Pag-IBIG ER" value={row.pagibigEr} onChange={(value) => onChange("pagibigEr", value)} />
+              </DetailSection>
+            </>
           ) : null}
 
           {category === "other" ? (
@@ -2014,6 +2022,25 @@ function AddPayrollPageInner() {
     (sum, adjustment) => sum + readNumber(adjustment.amount),
     0
   );
+
+  // Signed basic-salary adjustments per employee (e.g. Sample G's -12,800), used as the
+  // basicAdjustments input to the statutory engine so SSS brackets on the adjusted net basic.
+  const basicSalaryAdjustmentByEmployee = useMemo(() => {
+    const map = new Map<string, number>();
+    payrollAdjustments.forEach((adjustment) => {
+      const category = String(adjustment.adjustmentCategory || "");
+      if (category !== "basicSalaryIncrease" && category !== "basicSalaryDecrease") return;
+      const key = normalizeEmployeeId(adjustment.employeeNo ?? adjustment.employeeId ?? "");
+      if (!key) return;
+      // Prefer the signed netPayEffect; fall back to amount with the sign implied by the category.
+      const signed =
+        adjustment.netPayEffect !== undefined && adjustment.netPayEffect !== null
+          ? readNumber(adjustment.netPayEffect)
+          : (category === "basicSalaryDecrease" ? -1 : 1) * Math.abs(readNumber(adjustment.amount));
+      map.set(key, (map.get(key) || 0) + signed);
+    });
+    return map;
+  }, [payrollAdjustments]);
 
   const appliedMonetizedLeaveAdjustmentIdSet = new Set(appliedMonetizedLeaveAdjustmentIds);
 
@@ -2778,11 +2805,12 @@ function AddPayrollPageInner() {
     // Boldr-spec statutory engine (SSS 5% of MSC from net basic; PHIC 2.5% of gross basic; HDMF flat).
     // grossBasic = per-cutoff basic before absence/late; absence/late on basic = totalAbsences. The
     // zero rule fires when there is no basic/attendance, flooring all three to 0.
+    const basicAdjustments = basicSalaryAdjustmentByEmployee.get(normalizeEmployeeId(employee.employeeNo)) || 0;
     const statutory = computeStatutory(
       {
         grossBasic: fullBasicPay,
         absenceLateOnBasic: totalAbsences,
-        basicAdjustments: 0,
+        basicAdjustments,
         monthlyGrossBasic: (Number(employee.basicPay) || 0),
         payDate: payrollDate,
         runType: "regular" as StatutoryRunType,

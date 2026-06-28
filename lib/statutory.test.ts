@@ -86,6 +86,17 @@ describe("computeStatutory — Boldr payslip regression (regular run, default se
     expect(r.pagibig).toBe(100.0);
   });
 
+  it("basic salary INCREASE adjustment raises the SSS bracket (net basic)", () => {
+    // gross 10,150 alone -> MSC 10,000 (500). A +1,000 basic increase -> net 11,150 -> MSC 11,000 (550).
+    const r = computeStatutory(
+      { grossBasic: 10150, basicAdjustments: 1000, hasAttendance: true, runType: "regular" },
+      settings,
+      sssConfig
+    );
+    expect(r.sss).toBe(550.0);
+    expect(r.philhealth).toBe(253.75); // PHIC still on GROSS 10,150, unaffected by adjustment
+  });
+
   it("Zero case: hasAttendance false -> all zero", () => {
     const r = computeStatutory({ grossBasic: 12250, hasAttendance: false }, settings, sssConfig);
     expect(r.sss).toBe(0);

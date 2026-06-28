@@ -27,6 +27,8 @@ type PayrollRecord = {
 };
 
 type AdjustmentCategory =
+  | "basicSalaryIncrease"
+  | "basicSalaryDecrease"
   | "taxableAllowance"
   | "nonTaxableAllowance"
   | "deMinimis"
@@ -93,6 +95,20 @@ const adjustmentOptions: {
   needsHours: boolean;
   amountLabel: string;
 }[] = [
+  {
+    value: "basicSalaryIncrease",
+    label: "Basic Salary Adjustment - Increase",
+    type: "Addition",
+    needsHours: false,
+    amountLabel: "Basic Salary Increase Amount",
+  },
+  {
+    value: "basicSalaryDecrease",
+    label: "Basic Salary Adjustment - Decrease",
+    type: "Deduction",
+    needsHours: false,
+    amountLabel: "Basic Salary Decrease Amount",
+  },
   {
     value: "taxableAllowance",
     label: "Taxable Allowance - Additional",
