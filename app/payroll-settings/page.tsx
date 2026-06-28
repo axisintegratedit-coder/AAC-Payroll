@@ -37,6 +37,12 @@ import {
   SEED_CONTRIBUTION_BASIS_TOGGLES,
   SEED_PREMIUM_MULTIPLIERS,
 } from "@/lib/payrollSettingsTypes";
+import {
+  SEED_STATUTORY_SETTINGS,
+  SEED_EFFECTIVE_SSS_CONFIG,
+  buildSSSBrackets,
+  type StatutorySettings,
+} from "@/lib/statutory";
 
 // ─── helpers ─────────────────────────────────────────────────────────────────
 
@@ -1323,6 +1329,104 @@ function PremiumMultipliersSection() {
   );
 }
 
+// ─── Section 6: Boldr Statutory Engine ───────────────────────────────────────
+
+function StatutoryEngineSection() {
+  const { confirmAction, setPageSaving } = usePayrollSettingsUi();
+  const [settings, setSettings] = useState<StatutorySettings>(SEED_STATUTORY_SETTINGS);
+  const [saving, setSaving] = useState(false);
+
+  useEffect(() => {
+    getConfigItem<StatutorySettings>(storageKeys.statutorySettings, SEED_STATUTORY_SETTINGS).then((res) => {
+      setSettings(res?.philhealth ? res : SEED_STATUTORY_SETTINGS);
+    });
+  }, []);
+
+  const update = <K extends keyof StatutorySettings>(key: K, value: StatutorySettings[K]) =>
+    setSettings((s) => ({ ...s, [key]: value }));
+
+  const handleSave = async () => {
+    const confirmed = await confirmAction(
+      "Save statutory engine settings",
+      "These knobs drive SSS / PhilHealth / Pag-IBIG on every Draft run (recomputed live). Save?",
+      "Save settings"
+    );
+    if (!confirmed) return;
+    setSaving(true);
+    setPageSaving(true);
+    try {
+      // Persist the global knobs and ensure the corrected 5% MSC-centered SSS schedule is seeded.
+      await setConfigItem(storageKeys.statutorySettings, settings);
+      await setConfigItem(storageKeys.sssEffectiveConfig, {
+        ...SEED_EFFECTIVE_SSS_CONFIG,
+        brackets: buildSSSBrackets(),
+      });
+      emitSettingsUpdated(storageKeys.statutorySettings);
+      emitSettingsUpdated(storageKeys.sssEffectiveConfig);
+      await logAudit({ action: "SAVED", entityType: "PayrollSettings", entityId: "statutorySettings", entityName: "Boldr Statutory Engine" });
+    } finally {
+      setSaving(false);
+      setPageSaving(false);
+    }
+  };
+
+  const toggleRow = (label: string, key: keyof StatutorySettings, help: string) => (
+    <label style={{ display: "flex", alignItems: "flex-start", gap: 10, padding: "10px 12px", border: "1px solid #e2e8f0", borderRadius: 8 }}>
+      <input
+        type="checkbox"
+        checked={Boolean(settings[key])}
+        onChange={(e) => update(key, e.target.checked as never)}
+        style={{ marginTop: 3 }}
+      />
+      <span>
+        <span style={{ display: "block", fontWeight: 700, fontSize: 13, color: "#0f172a" }}>{label}</span>
+        <span style={{ display: "block", fontSize: 11, color: "#64748b", marginTop: 2 }}>{help}</span>
+      </span>
+    </label>
+  );
+
+  return (
+    <div style={{ display: "grid", gap: 16 }}>
+      <div style={{ padding: "10px 14px", background: "#fffbeb", border: "1px solid #fde68a", borderRadius: 8, fontSize: 12, fontWeight: 700, color: "#92400e" }}>
+        ⚠ SSS uses the corrected 5% MSC-centered schedule (replaces the old 4.5% table). Rules taken
+        verbatim from Boldr&apos;s spec. Two TODOs remain unconfirmed with Boldr (see toggles).
+      </div>
+      <div style={{ display: "grid", gap: 8 }}>
+        {toggleRow(
+          "SSS net of absence/late",
+          "sssNetOfAbsenceLate",
+          "DEFAULT OFF. Boldr payslips D & E showed SSS on the GROSS MSC bracket despite absences. Turn ON only if Boldr confirms absence/late is netted from the SSS base."
+        )}
+        {toggleRow(
+          "SSS net of adjustments",
+          "sssNetOfAdjustments",
+          "DEFAULT ON. Sample G (-12,800 basic adj) bracketed on net 10,400 → MSC 10,500 → 525."
+        )}
+        {toggleRow(
+          "EOM / final-pay true-up",
+          "eomTrueupEnabled",
+          "DEFAULT OFF. Full-month PHIC & HDMF in one EOM/final cutoff — contradicts Boldr's stated flat rules. Enable only if confirmed intended."
+        )}
+      </div>
+      <div style={{ fontSize: 12, color: "#475569", lineHeight: 1.6 }}>
+        <strong>Fixed formulas (not toggleable):</strong> SSS = 5% of MSC (bracketed from net basic) ·
+        PHIC = 2.5% of <em>gross</em> basic · HDMF = ₱100/cutoff (₱200/month) · Zero rule: no attendance
+        or no basic ⇒ no contributions, net floors at 0.
+      </div>
+      <div style={{ display: "flex", justifyContent: "flex-end" }}>
+        <button
+          type="button"
+          onClick={handleSave}
+          disabled={saving}
+          style={{ padding: "8px 18px", borderRadius: 8, border: "none", background: "var(--theme-accent)", color: "#fff", fontWeight: 700, cursor: saving ? "default" : "pointer", opacity: saving ? 0.6 : 1 }}
+        >
+          {saving ? "Saving…" : "Save settings"}
+        </button>
+      </div>
+    </div>
+  );
+}
+
 // ─── Section 5: A/B Rule Reference ────────────────────────────────────────────
 
 function ABRuleSection() {
@@ -1566,6 +1670,12 @@ export default function PayrollSettingsPage() {
       title: "5. A/B Rule Reference",
       subtitle: "Read-only definition of the Payroll A vs. Payroll B deduction basis.",
       content: <ABRuleSection />,
+    },
+    {
+      id: "statutory",
+      title: "6. Boldr Statutory Engine",
+      subtitle: "SSS (5% of MSC from net basic), PhilHealth (2.5% of gross basic), Pag-IBIG (flat) — Boldr-spec knobs.",
+      content: <StatutoryEngineSection />,
     },
   ];
 

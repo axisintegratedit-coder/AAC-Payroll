@@ -51,6 +51,14 @@ import { type DetailedRecord } from "@/lib/payrollExcel";
 import DetailedPayrollRegister from "@/app/components/DetailedPayrollRegister";
 import { SEED_CUTOFF_DEFINITIONS, SEED_PREMIUM_MULTIPLIERS, type CutoffDefinition, type PremiumMultipliersConfig } from "@/lib/payrollSettingsTypes";
 import { computePremiumBucketAmounts, PREMIUM_BUCKET_ORDER } from "@/lib/premiumBuckets";
+import {
+  computeStatutory,
+  SEED_EFFECTIVE_SSS_CONFIG,
+  SEED_STATUTORY_SETTINGS,
+  type EffectiveSSSConfig,
+  type StatutorySettings,
+  type StatutoryRunType,
+} from "@/lib/statutory";
 import { normalizeSalaryHistory, type SalaryHistoryEntry } from "@/lib/salaryHistory";
 
 import {
@@ -244,6 +252,7 @@ type SavedPayrollRecord = {
   philhealthEr?: number;
   pagibigEe?: number;
   pagibigEr?: number;
+  statutorySettingsEffectiveFrom?: string;
   totalGovtEmployeeContrib?: number;
   totalGovtEmployerContrib?: number;
   totalGovtContrib?: number;
@@ -383,6 +392,12 @@ type Calculation = {
   totalDeductions: number;
   netPay: number;
   customDeductionsTotal: number;
+  // Boldr-spec statutory engine outputs (employee share) + audit fields.
+  statutorySssEe: number;
+  statutoryPhilhealthEe: number;
+  statutoryPagibigEe: number;
+  statutorySssMsc: number;
+  statutorySettingsEffectiveFrom: string;
 };
 
 type PayrollCalculationInputs = {
@@ -1722,6 +1737,8 @@ function AddPayrollPageInner() {
   const [standingAllowances, setStandingAllowances] = useState<StandingAllowance[]>([]);
   const [payrollLoans, setPayrollLoans] = useState<PayrollLoanRecord[]>([]);
   const [premiumMultipliers, setPremiumMultipliers] = useState<PremiumMultipliersConfig>(SEED_PREMIUM_MULTIPLIERS);
+  const [statutorySettings, setStatutorySettings] = useState<StatutorySettings>(SEED_STATUTORY_SETTINGS);
+  const [sssEffectiveConfig, setSssEffectiveConfig] = useState<EffectiveSSSConfig>(SEED_EFFECTIVE_SSS_CONFIG);
   const [theme, setTheme] = useState<Partial<AppTheme>>(DEFAULT_APP_THEME);
   const [hasSpecialItemsThisCutoff, setHasSpecialItemsThisCutoff] = useState(false);
   const [specialItemsDecisionMade, setSpecialItemsDecisionMade] = useState(false);
@@ -1761,8 +1778,20 @@ function AddPayrollPageInner() {
       setPremiumMultipliers(saved?.rows?.length ? saved : SEED_PREMIUM_MULTIPLIERS);
     }
     window.addEventListener(`${storageKeys.premiumMultipliers}-updated`, loadPremiumMultipliers as EventListener);
+    async function loadStatutory() {
+      const [s, sss] = await Promise.all([
+        getConfigItem<StatutorySettings>(storageKeys.statutorySettings, SEED_STATUTORY_SETTINGS),
+        getConfigItem<EffectiveSSSConfig>(storageKeys.sssEffectiveConfig, SEED_EFFECTIVE_SSS_CONFIG),
+      ]);
+      setStatutorySettings(s?.philhealth ? s : SEED_STATUTORY_SETTINGS);
+      setSssEffectiveConfig(sss?.brackets?.length ? sss : SEED_EFFECTIVE_SSS_CONFIG);
+    }
+    window.addEventListener(`${storageKeys.statutorySettings}-updated`, loadStatutory as EventListener);
+    window.addEventListener(`${storageKeys.sssEffectiveConfig}-updated`, loadStatutory as EventListener);
     return () => {
       window.removeEventListener(`${storageKeys.premiumMultipliers}-updated`, loadPremiumMultipliers as EventListener);
+      window.removeEventListener(`${storageKeys.statutorySettings}-updated`, loadStatutory as EventListener);
+      window.removeEventListener(`${storageKeys.sssEffectiveConfig}-updated`, loadStatutory as EventListener);
     };
   }, []);
 
@@ -2089,6 +2118,12 @@ function AddPayrollPageInner() {
         getConfigItem<PremiumMultipliersConfig>(storageKeys.premiumMultipliers, SEED_PREMIUM_MULTIPLIERS),
       ]);
       setPremiumMultipliers(savedPremiumMultipliers?.rows?.length ? savedPremiumMultipliers : SEED_PREMIUM_MULTIPLIERS);
+      const [savedStatutorySettings, savedSssEffective] = await Promise.all([
+        getConfigItem<StatutorySettings>(storageKeys.statutorySettings, SEED_STATUTORY_SETTINGS),
+        getConfigItem<EffectiveSSSConfig>(storageKeys.sssEffectiveConfig, SEED_EFFECTIVE_SSS_CONFIG),
+      ]);
+      setStatutorySettings(savedStatutorySettings?.philhealth ? savedStatutorySettings : SEED_STATUTORY_SETTINGS);
+      setSssEffectiveConfig(savedSssEffective?.brackets?.length ? savedSssEffective : SEED_EFFECTIVE_SSS_CONFIG);
       const mappedEmployees = rawEmployees
         .filter((employee) => !employee.archived)
         .map((employee) => ({
@@ -2265,6 +2300,11 @@ function AddPayrollPageInner() {
             totalDeductions: num(record.totalDeductions),
             netPay: num(record.netPay),
             customDeductionsTotal: num(record.customDeductionsTotal),
+            statutorySssEe: num(record.sssEe),
+            statutoryPhilhealthEe: num(record.philhealthEe),
+            statutoryPagibigEe: num(record.pagibigEe),
+            statutorySssMsc: num(record.sssMonthlySalaryCredit),
+            statutorySettingsEffectiveFrom: String(record.statutorySettingsEffectiveFrom || SEED_STATUTORY_SETTINGS.effectiveFrom),
           },
           standingAllowanceLines: record.standingAllowanceLines || [],
           deMinimisLines: record.deMinimisLines || [],
@@ -2668,6 +2708,11 @@ function AddPayrollPageInner() {
         totalDeductions: 0,
         netPay: 0,
         customDeductionsTotal: 0,
+        statutorySssEe: 0,
+        statutoryPhilhealthEe: 0,
+        statutoryPagibigEe: 0,
+        statutorySssMsc: 0,
+        statutorySettingsEffectiveFrom: SEED_STATUTORY_SETTINGS.effectiveFrom,
       };
     }
 
@@ -2730,7 +2775,24 @@ function AddPayrollPageInner() {
       : 0;
     const totalAllowancesAdjusted = Math.max(0, totalAllowances - allowanceProrationDeduction);
 
-    const totalGovtEmployeeContrib = readNumber(row.sssEe) + readNumber(row.philhealthEe) + readNumber(row.pagibigEe);
+    // Boldr-spec statutory engine (SSS 5% of MSC from net basic; PHIC 2.5% of gross basic; HDMF flat).
+    // grossBasic = per-cutoff basic before absence/late; absence/late on basic = totalAbsences. The
+    // zero rule fires when there is no basic/attendance, flooring all three to 0.
+    const statutory = computeStatutory(
+      {
+        grossBasic: fullBasicPay,
+        absenceLateOnBasic: totalAbsences,
+        basicAdjustments: 0,
+        monthlyGrossBasic: (Number(employee.basicPay) || 0),
+        payDate: payrollDate,
+        runType: "regular" as StatutoryRunType,
+        hasAttendance: fullBasicPay > 0,
+      },
+      statutorySettings,
+      sssEffectiveConfig
+    );
+
+    const totalGovtEmployeeContrib = statutory.sss + statutory.philhealth + statutory.pagibig;
     const totalGovtEmployerContrib = readNumber(row.sssEr) + readNumber(row.philhealthEr) + readNumber(row.pagibigEr);
     const grossPay = basicPay + totalPayrollPremium + totalAllowancesAdjusted;
     const taxableIncome = Math.max(grossPay - nonTaxableDMB - excessDMBTo90k - totalGovtEmployeeContrib, 0);
@@ -2767,6 +2829,11 @@ function AddPayrollPageInner() {
       totalDeductions,
       netPay,
       customDeductionsTotal,
+      statutorySssEe: statutory.sss,
+      statutoryPhilhealthEe: statutory.philhealth,
+      statutoryPagibigEe: statutory.pagibig,
+      statutorySssMsc: statutory.sssMsc,
+      statutorySettingsEffectiveFrom: statutory.settingsEffectiveFrom,
     };
   };
 
@@ -3462,18 +3529,21 @@ function AddPayrollPageInner() {
           nonTaxableDMB: calculated.nonTaxableDMB,
           excessDMBTo90k: calculated.excessDMBTo90k,
           taxableDMBAfter90k: calculated.taxableDMBAfter90k,
-          sssMonthlySalaryCredit: readNumber(row.sssMonthlySalaryCredit),
           sssRegularEe: readNumber(row.sssRegularEe),
           sssRegularEr: readNumber(row.sssRegularEr),
           sssWispEe: readNumber(row.sssWispEe),
           sssWispEr: readNumber(row.sssWispEr),
           sssEc: readNumber(row.sssEc),
-          sssEe: readNumber(row.sssEe),
+          // Employee-share contributions come from the Boldr-spec statutory engine (authoritative),
+          // not the editable row defaults. MSC + settings effective_from persisted for audit.
+          sssEe: calculated.statutorySssEe,
           sssEr: readNumber(row.sssEr),
-          philhealthEe: readNumber(row.philhealthEe),
+          philhealthEe: calculated.statutoryPhilhealthEe,
           philhealthEr: readNumber(row.philhealthEr),
-          pagibigEe: readNumber(row.pagibigEe),
+          pagibigEe: calculated.statutoryPagibigEe,
           pagibigEr: readNumber(row.pagibigEr),
+          sssMonthlySalaryCredit: calculated.statutorySssMsc,
+          statutorySettingsEffectiveFrom: calculated.statutorySettingsEffectiveFrom,
           totalGovtEmployeeContrib: calculated.totalGovtEmployeeContrib,
           totalGovtEmployerContrib: calculated.totalGovtEmployerContrib,
           totalGovtContrib: calculated.totalGovtEmployeeContrib + calculated.totalGovtEmployerContrib,

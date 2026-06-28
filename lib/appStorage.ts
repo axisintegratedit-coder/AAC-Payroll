@@ -55,4 +55,7 @@ export const storageKeys = {
   birConfig: "payroll.birBrackets",
   contributionBasisToggles: "payroll.contributionBasisToggles",
   premiumMultipliers: "payroll.premiumMultipliers",
+  // Boldr-spec statutory engine: corrected 5% MSC-centered SSS schedule + global knobs.
+  statutorySettings: "payroll.statutorySettings",
+  sssEffectiveConfig: "payroll.sssEffectiveConfig",
 } as const;
