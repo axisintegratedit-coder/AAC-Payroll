@@ -1288,19 +1288,19 @@ function PremiumMultipliersSection() {
                 {editing ? (
                   <>
                     <td style={{ padding: "5px 8px" }}>
-                      <input value={row.bucket} onChange={(e) => updateRow(idx, "bucket", e.target.value)} style={{ width: 180, padding: "4px 7px", border: "1px solid #cbd5e1", borderRadius: 6, fontSize: 12 }} />
+                      <input value={row.bucket} onChange={(e) => updateRow(idx, "bucket", e.target.value)} style={{ width: 180, padding: "4px 7px", border: "1px solid #cbd5e1", borderRadius: 6, fontSize: 12, color: "#0f172a" }} />
                     </td>
                     <td style={{ padding: "5px 8px" }}>
-                      <input type="number" step="0.01" value={row.baseMultiplier} onChange={(e) => updateRow(idx, "baseMultiplier", e.target.value)} style={{ width: 75, padding: "4px 7px", border: "1px solid #cbd5e1", borderRadius: 6, fontSize: 12, textAlign: "right" }} />
+                      <input type="number" step="0.01" value={row.baseMultiplier} onChange={(e) => updateRow(idx, "baseMultiplier", e.target.value)} style={{ width: 75, padding: "4px 7px", border: "1px solid #cbd5e1", borderRadius: 6, fontSize: 12, textAlign: "right", color: "#0f172a" }} />
                     </td>
                     <td style={{ padding: "5px 8px" }}>
-                      <input type="number" step="0.01" value={row.ndMultiplier} onChange={(e) => updateRow(idx, "ndMultiplier", e.target.value)} style={{ width: 75, padding: "4px 7px", border: "1px solid #cbd5e1", borderRadius: 6, fontSize: 12, textAlign: "right" }} />
+                      <input type="number" step="0.01" value={row.ndMultiplier} onChange={(e) => updateRow(idx, "ndMultiplier", e.target.value)} style={{ width: 75, padding: "4px 7px", border: "1px solid #cbd5e1", borderRadius: 6, fontSize: 12, textAlign: "right", color: "#0f172a" }} />
                     </td>
                     <td style={{ padding: "5px 8px", textAlign: "right", fontWeight: 700, color: "#0f172a" }}>
                       {fmt(row.finalMultiplier, 4)}
                     </td>
                     <td style={{ padding: "5px 8px" }}>
-                      <input value={row.notes} onChange={(e) => updateRow(idx, "notes", e.target.value)} style={{ width: 240, padding: "4px 7px", border: "1px solid #cbd5e1", borderRadius: 6, fontSize: 12 }} />
+                      <input value={row.notes} onChange={(e) => updateRow(idx, "notes", e.target.value)} style={{ width: 240, padding: "4px 7px", border: "1px solid #cbd5e1", borderRadius: 6, fontSize: 12, color: "#0f172a" }} />
                     </td>
                   </>
                 ) : (
