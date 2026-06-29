@@ -59,6 +59,8 @@ import {
   type StatutorySettings,
   type StatutoryRunType,
 } from "@/lib/statutory";
+import { runDeMinimisWaterfall, NINETY_K_BUCKET_CAP, type WaterfallLineInput } from "@/lib/deMinimisWaterfall";
+import { deriveYtdBucketState } from "@/lib/deMinimisYtd";
 import { normalizeSalaryHistory, type SalaryHistoryEntry } from "@/lib/salaryHistory";
 
 import {
@@ -240,6 +242,8 @@ type SavedPayrollRecord = {
   nonTaxableDMB?: number;
   excessDMBTo90k?: number;
   taxableDMBAfter90k?: number;
+  ninetyKBucketContribution?: number;
+  taxableFromCatalogDeMinimis?: number;
   sssMonthlySalaryCredit?: number;
   sssRegularEe?: number;
   sssRegularEr?: number;
@@ -400,6 +404,9 @@ type Calculation = {
   statutoryPagibigEe: number;
   statutorySssMsc: number;
   statutorySettingsEffectiveFrom: string;
+  // De minimis waterfall (catalog lines): amount fed to the 90k bucket and the taxable crossing.
+  ninetyKBucketContribution: number;
+  taxableFromCatalogDeMinimis: number;
 };
 
 type PayrollCalculationInputs = {
@@ -2332,6 +2339,8 @@ function AddPayrollPageInner() {
             statutoryPagibigEe: num(record.pagibigEe),
             statutorySssMsc: num(record.sssMonthlySalaryCredit),
             statutorySettingsEffectiveFrom: String(record.statutorySettingsEffectiveFrom || SEED_STATUTORY_SETTINGS.effectiveFrom),
+            ninetyKBucketContribution: num(record.ninetyKBucketContribution),
+            taxableFromCatalogDeMinimis: num(record.taxableFromCatalogDeMinimis),
           },
           standingAllowanceLines: record.standingAllowanceLines || [],
           deMinimisLines: record.deMinimisLines || [],
@@ -2740,6 +2749,8 @@ function AddPayrollPageInner() {
         statutoryPagibigEe: 0,
         statutorySssMsc: 0,
         statutorySettingsEffectiveFrom: SEED_STATUTORY_SETTINGS.effectiveFrom,
+        ninetyKBucketContribution: 0,
+        taxableFromCatalogDeMinimis: 0,
       };
     }
 
@@ -2792,6 +2803,46 @@ function AddPayrollPageInner() {
     const taxableDMBAfter90k = Math.max(amountSubjectTo90k - 90000, 0);
     const standingAllowancesTotal = (inputs.standingAllowanceLines || []).reduce((sum, line) => sum + line.amount, 0);
     const deMinimisLinesTotal = (inputs.deMinimisLines || []).reduce((sum, line) => sum + line.amount, 0);
+
+    // ── BIR de minimis waterfall (catalog lines) with YTD 90k tracking ──────────────────────────
+    // YTD bucket is derived from posted records (deterministic, re-run-safe), excluding this run.
+    const recordYearForRun = String(monthYear || payrollDate || "").match(/(\d{4})/)?.[1] || "";
+    // Exclude any already-saved records for THIS cutoff (same monthYear + period) so re-computing or
+    // re-viewing a run doesn't double-count its own contribution into the YTD bucket.
+    const currentCutoffKey = `${monthYear || ""}|${payrollPeriod || ""}`;
+    const ytdState = deriveYtdBucketState(savedPayrollRecords, employee.employeeNo, recordYearForRun, {
+      excludeRecordIds: new Set(
+        savedPayrollRecords
+          .filter((r) => `${r.monthYear || ""}|${r.payrollPeriod || ""}` === currentCutoffKey)
+          .map((r) => r.id)
+          .filter(Boolean) as string[]
+      ),
+    });
+    const waterfallLines: WaterfallLineInput[] = (inputs.deMinimisLines || []).map((line) => ({
+      benefitId: line.benefitId,
+      name: line.name,
+      amount: line.amount,
+      hasOwnCeiling: Boolean(line.hasOwnCeiling),
+      feeds90kBucket: line.feeds90kBucket ?? true,
+      ceiling: line.ceiling,
+      ceilingBasis: line.ceilingBasis ?? "monthly",
+      dailyMinWageRate: line.dailyMinWageRate,
+      requiresNonCash: line.requiresNonCash,
+      isCash: true,
+      ceilingContext: {
+        yearToDateUsed: ytdState.ytdOwnCeilingUsed[line.benefitId] || 0,
+      },
+    }));
+    // Legacy fixed-field excess + 13th/bonus/other taxable allowances also consume the 90k cap. Feed
+    // them in first so catalog de minimis sees the correct remaining headroom (no double-count: the
+    // fixed-field excess keeps its own tax treatment below; here it only advances the running bucket).
+    const deMinimisWaterfall = runDeMinimisWaterfall({
+      lines: waterfallLines,
+      ytdBucketUsedBefore: ytdState.ytd90kBucketUsed,
+      ninetyKCap: NINETY_K_BUCKET_CAP,
+    });
+    const taxableFromCatalogDeMinimis = deMinimisWaterfall.taxableFromDeMinimis;
+    const ninetyKBucketContribution = deMinimisWaterfall.totalToBucket;
     // Unadjusted (full) allowance pool — every allowance, before any Payroll Type B proration.
     const totalAllowances = totalDeMinimisEntered + meal + leave + thirteenth + christmasBonus + otherTaxable + customAllowancesTotal + standingAllowancesTotal + deMinimisLinesTotal;
 
@@ -2823,7 +2874,14 @@ function AddPayrollPageInner() {
     const totalGovtEmployeeContrib = statutory.sss + statutory.philhealth + statutory.pagibig;
     const totalGovtEmployerContrib = readNumber(row.sssEr) + readNumber(row.philhealthEr) + readNumber(row.pagibigEr);
     const grossPay = basicPay + totalPayrollPremium + totalAllowancesAdjusted;
-    const taxableIncome = Math.max(grossPay - nonTaxableDMB - excessDMBTo90k - totalGovtEmployeeContrib, 0);
+    // Catalog de minimis lines sit inside gross; their exempt portion (own-ceiling exempt + still-under-
+    // 90k bucket) must be removed from the tax base. Only `taxableFromCatalogDeMinimis` (own-ceiling
+    // excess for non-bucket items + the amount that crossed ₱90k) stays taxable.
+    const catalogDeMinimisExempt = Math.max(0, deMinimisLinesTotal - taxableFromCatalogDeMinimis);
+    const taxableIncome = Math.max(
+      grossPay - nonTaxableDMB - excessDMBTo90k - catalogDeMinimisExempt - totalGovtEmployeeContrib,
+      0
+    );
     const withholdingTax = computeWithholdingTaxByFrequency(taxableIncome, payrollFrequency);
     const customDeductionsTotal = Object.values(row.customDeductionValues || {}).reduce((sum, value) => sum + readNumber(value), 0);
     const loanDeductionTotal = (inputs.loanDeductions || []).reduce((sum, line) => sum + line.amount, 0);
@@ -2862,6 +2920,8 @@ function AddPayrollPageInner() {
       statutoryPagibigEe: statutory.pagibig,
       statutorySssMsc: statutory.sssMsc,
       statutorySettingsEffectiveFrom: statutory.settingsEffectiveFrom,
+      ninetyKBucketContribution,
+      taxableFromCatalogDeMinimis,
     };
   };
 
@@ -3557,6 +3617,8 @@ function AddPayrollPageInner() {
           nonTaxableDMB: calculated.nonTaxableDMB,
           excessDMBTo90k: calculated.excessDMBTo90k,
           taxableDMBAfter90k: calculated.taxableDMBAfter90k,
+          ninetyKBucketContribution: calculated.ninetyKBucketContribution,
+          taxableFromCatalogDeMinimis: calculated.taxableFromCatalogDeMinimis,
           sssRegularEe: readNumber(row.sssRegularEe),
           sssRegularEr: readNumber(row.sssRegularEr),
           sssWispEe: readNumber(row.sssWispEe),

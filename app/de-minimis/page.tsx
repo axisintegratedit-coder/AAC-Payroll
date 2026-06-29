@@ -6,6 +6,7 @@ import { CheckCircle2, Pencil, Plus, Search, Trash2, X } from "lucide-react";
 import { storageKeys } from "@/lib/appStorage";
 import { getCollectionItems, setCollectionItems } from "@/lib/firestore";
 import { logAudit } from "@/lib/auditTrail";
+import { runDeMinimisWaterfall } from "@/lib/deMinimisWaterfall";
 import { canAccessAdminPageAsync, getCurrentAdminUser } from "@/lib/adminAuth";
 import {
   BOLDR_DEFAULT_DE_MINIMIS_ID,
@@ -17,6 +18,7 @@ import {
   type DeMinimisBenefit,
   type DeMinimisCategoryTarget,
   type DeMinimisCutoffSlot,
+  type DeMinimisCeilingBasis,
   type DeMinimisFrequency,
   type DeMinimisSuggestedType,
 } from "@/lib/deMinimis";
@@ -78,6 +80,12 @@ function emptyDraft(): BenefitDraft {
     maxAmount: undefined,
     hasOwnCeiling: false,
     ceiling: undefined,
+    ceilingBasis: "monthly",
+    feeds90kBucket: true,
+    requiresNonCash: false,
+    isEnumerated: false,
+    rrReference: "",
+    dailyMinWageRate: undefined,
     frequency: "Monthly",
     monthlyCutoff: "15th",
     annualMonth: "",
@@ -322,6 +330,12 @@ export default function DeMinimisPage() {
       maxAmount: benefit.maxAmount,
       hasOwnCeiling: benefit.hasOwnCeiling,
       ceiling: benefit.ceiling,
+      ceilingBasis: benefit.ceilingBasis ?? "monthly",
+      feeds90kBucket: benefit.feeds90kBucket ?? true,
+      requiresNonCash: benefit.requiresNonCash ?? false,
+      isEnumerated: benefit.isEnumerated ?? benefit.hasOwnCeiling,
+      rrReference: benefit.rrReference ?? "",
+      dailyMinWageRate: benefit.dailyMinWageRate,
       frequency: benefit.frequency,
       monthlyCutoff: benefit.monthlyCutoff || "15th",
       annualMonth: benefit.annualMonth || "",
@@ -351,6 +365,11 @@ export default function DeMinimisPage() {
       name: preset?.name || current.name,
       hasOwnCeiling: preset?.hasOwnCeiling ?? false,
       ceiling: preset?.ceiling,
+      ceilingBasis: preset?.ceilingBasis ?? "monthly",
+      feeds90kBucket: preset?.feeds90kBucket ?? true,
+      requiresNonCash: preset?.requiresNonCash ?? false,
+      isEnumerated: preset?.isEnumerated ?? (preset?.hasOwnCeiling ?? false),
+      rrReference: preset?.rrReference ?? "",
       frequency: preset?.frequency || current.frequency,
       birVerificationNote: value === "Custom" ? "" : DE_MINIMIS_BIR_VERIFICATION_NOTE,
       remarks: preset?.remarks || current.remarks,
@@ -420,6 +439,13 @@ export default function DeMinimisPage() {
       maxAmount: draft.maxAmount === undefined || draft.maxAmount === null ? undefined : Number(draft.maxAmount),
       hasOwnCeiling: Boolean(draft.hasOwnCeiling),
       ceiling: draft.hasOwnCeiling ? Number(draft.ceiling) || 0 : undefined,
+      ceilingBasis: draft.hasOwnCeiling ? (draft.ceilingBasis ?? "monthly") : undefined,
+      feeds90kBucket: Boolean(draft.feeds90kBucket),
+      requiresNonCash: Boolean(draft.requiresNonCash),
+      isEnumerated: Boolean(draft.isEnumerated),
+      rrReference: draft.rrReference?.trim() || undefined,
+      dailyMinWageRate:
+        draft.hasOwnCeiling && draft.ceilingBasis === "daily" ? Number(draft.dailyMinWageRate) || 0 : undefined,
       monthlyCutoff: draft.frequency === "Monthly" ? draft.monthlyCutoff : undefined,
       annualMonth: draft.frequency === "Annual" ? draft.annualMonth : undefined,
       annualCutoff: draft.frequency === "Annual" ? draft.annualCutoff : undefined,
@@ -787,30 +813,116 @@ export default function DeMinimisPage() {
                   className={inputClassName}
                 />
               </label>
-              <label>
-                <div className="mb-1.5 text-xs font-black uppercase tracking-[0.08em] text-slate-500">Has Own Ceiling *</div>
-                <select
-                  value={draft.hasOwnCeiling ? "Yes" : "No"}
-                  onChange={(event) => setDraft((current) => ({ ...current, hasOwnCeiling: event.target.value === "Yes" }))}
-                  className={inputClassName}
-                >
-                  <option>Yes</option>
-                  <option>No</option>
-                </select>
-              </label>
-              {draft.hasOwnCeiling ? (
-                <label>
-                  <div className="mb-1.5 text-xs font-black uppercase tracking-[0.08em] text-slate-500">Ceiling *</div>
+              <div className="md:col-span-3 grid gap-2 rounded-xl border border-slate-200 bg-slate-50 p-3">
+                <label className="flex items-center gap-2 text-sm font-bold text-slate-700">
                   <input
-                    type="number"
-                    min={0}
-                    step="0.01"
-                    value={draft.ceiling ?? ""}
-                    onChange={(event) => setDraft((current) => ({ ...current, ceiling: Number(event.target.value) }))}
-                    className={inputClassName}
+                    type="checkbox"
+                    checked={Boolean(draft.hasOwnCeiling)}
+                    onChange={(event) => setDraft((current) => ({ ...current, hasOwnCeiling: event.target.checked, isEnumerated: event.target.checked || current.isEnumerated }))}
+                    className="h-4 w-4 accent-[#0a4f8f]"
                   />
+                  Has its own BIR threshold
                 </label>
+                <label className="flex items-center gap-2 text-sm font-bold text-slate-700">
+                  <input
+                    type="checkbox"
+                    checked={Boolean(draft.feeds90kBucket)}
+                    onChange={(event) => setDraft((current) => ({ ...current, feeds90kBucket: event.target.checked }))}
+                    className="h-4 w-4 accent-[#0a4f8f]"
+                  />
+                  Excess falls under the ₱90,000 other-benefits ceiling
+                </label>
+                <label className="flex items-center gap-2 text-sm font-bold text-slate-700">
+                  <input
+                    type="checkbox"
+                    checked={Boolean(draft.requiresNonCash)}
+                    onChange={(event) => setDraft((current) => ({ ...current, requiresNonCash: event.target.checked }))}
+                    className="h-4 w-4 accent-[#0a4f8f]"
+                  />
+                  BIR requires this as tangible property (non-cash) to stay exempt
+                </label>
+              </div>
+              {draft.hasOwnCeiling ? (
+                <>
+                  <label>
+                    <div className="mb-1.5 text-xs font-black uppercase tracking-[0.08em] text-slate-500">Ceiling Amount *</div>
+                    <input
+                      type="number"
+                      min={0}
+                      step="0.01"
+                      value={draft.ceiling ?? ""}
+                      onChange={(event) => setDraft((current) => ({ ...current, ceiling: Number(event.target.value) }))}
+                      className={inputClassName}
+                    />
+                  </label>
+                  <label>
+                    <div className="mb-1.5 text-xs font-black uppercase tracking-[0.08em] text-slate-500">Ceiling Basis *</div>
+                    <select
+                      value={draft.ceilingBasis ?? "monthly"}
+                      onChange={(event) => setDraft((current) => ({ ...current, ceilingBasis: event.target.value as DeMinimisCeilingBasis }))}
+                      className={inputClassName}
+                    >
+                      <option value="per_cutoff">Per cutoff</option>
+                      <option value="monthly">Monthly</option>
+                      <option value="per_semester">Per semester</option>
+                      <option value="annual">Annual</option>
+                      <option value="daily">Daily (25% of daily min wage)</option>
+                    </select>
+                  </label>
+                  {draft.ceilingBasis === "daily" ? (
+                    <label>
+                      <div className="mb-1.5 text-xs font-black uppercase tracking-[0.08em] text-slate-500">Regional Daily Min Wage</div>
+                      <input
+                        type="number"
+                        min={0}
+                        step="0.01"
+                        value={draft.dailyMinWageRate ?? ""}
+                        onChange={(event) => setDraft((current) => ({ ...current, dailyMinWageRate: event.target.value ? Number(event.target.value) : undefined }))}
+                        className={inputClassName}
+                      />
+                    </label>
+                  ) : null}
+                </>
               ) : null}
+              {(() => {
+                // Live classification preview for the entered amount (assumes a fresh ₱90k bucket).
+                const preview = runDeMinimisWaterfall({
+                  lines: [{
+                    benefitId: "preview",
+                    name: draft.name || "Benefit",
+                    amount: Number(draft.amount) || 0,
+                    hasOwnCeiling: Boolean(draft.hasOwnCeiling),
+                    feeds90kBucket: Boolean(draft.feeds90kBucket),
+                    ceiling: draft.ceiling,
+                    ceilingBasis: draft.ceilingBasis ?? "monthly",
+                    dailyMinWageRate: draft.dailyMinWageRate,
+                    requiresNonCash: draft.requiresNonCash,
+                    isCash: true,
+                    ceilingContext: { payableDaysInCutoff: 1 },
+                  }],
+                  ytdBucketUsedBefore: 0,
+                });
+                const line = preview.lines[0];
+                return (
+                  <div className="md:col-span-3 rounded-xl border border-sky-200 bg-sky-50 p-3 text-sm font-semibold text-slate-700">
+                    <div className="text-xs font-black uppercase tracking-[0.08em] text-sky-700">Classification preview (fresh ₱90k bucket)</div>
+                    <div className="mt-1">
+                      {formatCurrency(line.exemptPortion)} exempt · {formatCurrency(line.toBucketPortion)} to 90k bucket · {formatCurrency(line.immediateTaxable + line.bucketTaxableThisCutoff)} taxable this cutoff
+                    </div>
+                    <div className="mt-1 text-xs font-semibold text-slate-500">Actual taxable depends on the employee&apos;s YTD bucket at run time.</div>
+                    {line.nonCashWarning ? (
+                      <div className="mt-2 rounded-lg border border-amber-300 bg-amber-50 px-2 py-1 text-xs font-bold text-amber-800">
+                        ⚠ BIR requires this as tangible property, not cash, to stay exempt.
+                      </div>
+                    ) : null}
+                    {!draft.isEnumerated && (Number(draft.amount) || 0) >= 5000 ? (
+                      <div className="mt-2 rounded-lg border border-amber-300 bg-amber-50 px-2 py-1 text-xs font-bold text-amber-800">
+                        ⚠ Large general (non-enumerated) benefit — consider itemizing into named BIR categories to reduce audit risk.
+                      </div>
+                    ) : null}
+                  </div>
+                );
+              })()}
               <label>
                 <div className="mb-1.5 text-xs font-black uppercase tracking-[0.08em] text-slate-500">Frequency *</div>
                 <select

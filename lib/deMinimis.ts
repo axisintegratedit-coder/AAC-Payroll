@@ -12,6 +12,9 @@ export type DeMinimisSuggestedType =
   | "Custom";
 export type DeMinimisCategoryTarget = "All employees" | "All Rank and File" | "All Supervisory";
 
+// How a benefit's own ceiling is measured for the period. Drives ceiling proration in the engine.
+export type DeMinimisCeilingBasis = "per_cutoff" | "monthly" | "per_semester" | "annual" | "daily";
+
 export type DeMinimisBenefit = {
   id: string;
   name: string;
@@ -21,6 +24,13 @@ export type DeMinimisBenefit = {
   maxAmount?: number;
   hasOwnCeiling: boolean;
   ceiling?: number;
+  // ── BIR waterfall classification (RR 29-2025). All ceilings are DATA, never hardcoded in logic. ──
+  ceilingBasis?: DeMinimisCeilingBasis; // default "monthly"
+  feeds90kBucket?: boolean; // default true — over-ceiling excess flows to the ₱90k other-benefits bucket
+  requiresNonCash?: boolean; // e.g. achievement award must be tangible property to stay exempt
+  isEnumerated?: boolean; // true = named BIR de minimis item; false = general/uncategorized benefit
+  rrReference?: string; // e.g. "RR 29-2025"
+  dailyMinWageRate?: number; // region-dependent daily minimum wage, for ceilingBasis "daily" (25% of this)
   frequency: DeMinimisFrequency;
   monthlyCutoff?: DeMinimisCutoffSlot;
   annualMonth?: string;
@@ -53,6 +63,12 @@ export type DeMinimisLine = {
   excessPortion: number;
   frequency: DeMinimisFrequency;
   sharedNinetyKBucketPortion: number;
+  // BIR waterfall classification carried through for the tax engine.
+  ceilingBasis?: DeMinimisCeilingBasis;
+  feeds90kBucket?: boolean;
+  requiresNonCash?: boolean;
+  isEnumerated?: boolean;
+  dailyMinWageRate?: number;
 };
 
 export type DeMinimisSuggestedTypePreset = {
@@ -60,6 +76,11 @@ export type DeMinimisSuggestedTypePreset = {
   name: string;
   hasOwnCeiling: boolean;
   ceiling?: number;
+  ceilingBasis?: DeMinimisCeilingBasis;
+  feeds90kBucket?: boolean;
+  requiresNonCash?: boolean;
+  isEnumerated?: boolean;
+  rrReference?: string;
   frequency: DeMinimisFrequency;
   remarks: string;
 };
@@ -80,8 +101,13 @@ export function createBoldrDefaultDeMinimisBenefit(options: {
     name: "De Minimis Allowance",
     suggestedType: "Custom",
     amount: 5000,
-    hasOwnCeiling: true,
-    ceiling: 5000,
+    // Modeled as a GENERAL benefit until Boldr provides a per-category breakdown: no standalone
+    // exemption, full amount routes to the ₱90k other-benefits bucket (instead of silently exempting).
+    hasOwnCeiling: false,
+    ceiling: undefined,
+    ceilingBasis: "monthly",
+    feeds90kBucket: true,
+    isEnumerated: false,
     frequency: "Monthly",
     monthlyCutoff: "15th",
     remarks: BOLDR_DEFAULT_DE_MINIMIS_REMARKS,
@@ -93,61 +119,90 @@ export function createBoldrDefaultDeMinimisBenefit(options: {
   };
 }
 
+// RR 29-2025 enumerated ceilings. ⚠ STARTING VALUES — verify against the full text before go-live.
+const RR = "RR 29-2025";
 export const DE_MINIMIS_SUGGESTED_TYPE_PRESETS: DeMinimisSuggestedTypePreset[] = [
   {
     suggestedType: "Rice Subsidy",
     name: "Rice Subsidy",
     hasOwnCeiling: true,
     ceiling: 2000,
+    ceilingBasis: "monthly",
+    feeds90kBucket: true,
+    isEnumerated: true,
+    rrReference: RR,
     frequency: "Monthly",
-    remarks: DE_MINIMIS_BIR_VERIFICATION_NOTE,
-  },
-  {
-    suggestedType: "Uniform Allowance",
-    name: "Uniform Allowance",
-    hasOwnCeiling: true,
-    ceiling: 6000,
-    frequency: "Annual",
     remarks: DE_MINIMIS_BIR_VERIFICATION_NOTE,
   },
   {
     suggestedType: "Laundry Allowance",
     name: "Laundry Allowance",
     hasOwnCeiling: true,
-    ceiling: 300,
+    ceiling: 400,
+    ceilingBasis: "monthly",
+    feeds90kBucket: true,
+    isEnumerated: true,
+    rrReference: RR,
     frequency: "Monthly",
     remarks: DE_MINIMIS_BIR_VERIFICATION_NOTE,
   },
   {
     suggestedType: "Medical Cash Allowance",
-    name: "Medical Cash Allowance",
+    name: "Medical cash allowance to dependents",
     hasOwnCeiling: true,
-    ceiling: 1500,
+    ceiling: 333,
+    ceilingBasis: "monthly",
+    feeds90kBucket: true,
+    isEnumerated: true,
+    rrReference: RR,
     frequency: "Monthly",
     remarks: DE_MINIMIS_BIR_VERIFICATION_NOTE,
   },
   {
-    suggestedType: "Medical Assistance",
-    name: "Medical Assistance",
+    suggestedType: "Uniform Allowance",
+    name: "Uniform / Clothing Allowance",
     hasOwnCeiling: true,
-    ceiling: 10000,
+    ceiling: 8000,
+    ceilingBasis: "annual",
+    feeds90kBucket: true,
+    isEnumerated: true,
+    rrReference: RR,
+    frequency: "Annual",
+    remarks: DE_MINIMIS_BIR_VERIFICATION_NOTE,
+  },
+  {
+    suggestedType: "Medical Assistance",
+    name: "Actual Medical Assistance",
+    hasOwnCeiling: true,
+    ceiling: 12000,
+    ceilingBasis: "annual",
+    feeds90kBucket: true,
+    isEnumerated: true,
+    rrReference: RR,
     frequency: "Annual",
     remarks: DE_MINIMIS_BIR_VERIFICATION_NOTE,
   },
   {
     suggestedType: "Achievement Award",
-    name: "Achievement Award",
+    name: "Employee Achievement Award",
     hasOwnCeiling: true,
-    ceiling: 10000,
+    ceiling: 12000,
+    ceilingBasis: "annual",
+    feeds90kBucket: true,
+    requiresNonCash: true,
+    isEnumerated: true,
+    rrReference: RR,
     frequency: "Annual",
-    remarks: DE_MINIMIS_BIR_VERIFICATION_NOTE,
+    remarks: "Must be tangible property, not cash, to stay exempt. " + DE_MINIMIS_BIR_VERIFICATION_NOTE,
   },
   {
     suggestedType: "Custom",
-    name: "",
+    name: "General Benefit (uncategorized cash)",
     hasOwnCeiling: false,
-    frequency: "Monthly",
-    remarks: "",
+    feeds90kBucket: true,
+    isEnumerated: false,
+    frequency: "Semi-monthly",
+    remarks: "No standalone exemption — full amount routes to the ₱90k other-benefits bucket.",
   },
 ];
 
@@ -232,6 +287,12 @@ export function getDeMinimisForCutoff(
         excessPortion,
         frequency: benefit.frequency,
         sharedNinetyKBucketPortion: excessPortion,
+        // Default missing flags to the safe BIR behavior: excess feeds the 90k bucket.
+        ceilingBasis: benefit.ceilingBasis ?? "monthly",
+        feeds90kBucket: benefit.feeds90kBucket ?? true,
+        requiresNonCash: benefit.requiresNonCash ?? false,
+        isEnumerated: benefit.isEnumerated ?? benefit.hasOwnCeiling,
+        dailyMinWageRate: benefit.dailyMinWageRate,
       };
     });
 }
