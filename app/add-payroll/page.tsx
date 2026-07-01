@@ -61,6 +61,7 @@ import {
 } from "@/lib/statutory";
 import { runDeMinimisWaterfall, NINETY_K_BUCKET_CAP, type WaterfallLineInput } from "@/lib/deMinimisWaterfall";
 import { deriveYtdBucketState } from "@/lib/deMinimisYtd";
+import { computeWithholdingTaxByFrequency } from "@/lib/withholdingTax";
 import { normalizeSalaryHistory, type SalaryHistoryEntry } from "@/lib/salaryHistory";
 
 import {
@@ -563,36 +564,6 @@ function computePagibigContributionFromMonthlyPay() {
     pagibigEe: 200,
     pagibigEr: 200,
   };
-}
-
-function computeWithholdingTaxByFrequency(taxableIncome: number, payrollFrequency: string) {
-  const taxablePay = Math.max(Number(taxableIncome) || 0, 0);
-  const normalizedFrequency = payrollFrequency.toLowerCase();
-
-  if (normalizedFrequency.includes("weekly")) {
-    if (taxablePay <= 4808) return 0;
-    if (taxablePay <= 7691) return (taxablePay - 4808) * 0.15;
-    if (taxablePay <= 15384) return 432.6 + (taxablePay - 7692) * 0.2;
-    if (taxablePay <= 38461) return 1971.2 + (taxablePay - 15385) * 0.25;
-    if (taxablePay <= 153845) return 7740.45 + (taxablePay - 38462) * 0.3;
-    return 42355.65 + (taxablePay - 153846) * 0.35;
-  }
-
-  if (normalizedFrequency.includes("semi")) {
-    if (taxablePay <= 10417) return 0;
-    if (taxablePay <= 16666) return (taxablePay - 10417) * 0.15;
-    if (taxablePay <= 33332) return 937.5 + (taxablePay - 16667) * 0.2;
-    if (taxablePay <= 83332) return 4270.7 + (taxablePay - 33333) * 0.25;
-    if (taxablePay <= 333332) return 16770.7 + (taxablePay - 83333) * 0.3;
-    return 91770.7 + (taxablePay - 333333) * 0.35;
-  }
-
-  if (taxablePay <= 20833) return 0;
-  if (taxablePay <= 33332) return (taxablePay - 20833) * 0.15;
-  if (taxablePay <= 66666) return 1875 + (taxablePay - 33333) * 0.2;
-  if (taxablePay <= 166666) return 8541.8 + (taxablePay - 66667) * 0.25;
-  if (taxablePay <= 666666) return 33541.8 + (taxablePay - 166667) * 0.3;
-  return 183541.8 + (taxablePay - 666667) * 0.35;
 }
 
 function parseCsvLine(line: string) {
@@ -2857,9 +2828,13 @@ function AddPayrollPageInner() {
     // grossBasic = per-cutoff basic before absence/late; absence/late on basic = totalAbsences. The
     // zero rule fires when there is no basic/attendance, flooring all three to 0.
     const basicAdjustments = basicSalaryAdjustmentByEmployee.get(normalizeEmployeeId(employee.employeeNo)) || 0;
+    // Per-cutoff gross pay (same components used for grossPay below), passed so the SSS engine can set
+    // the MSC bracket on gross when sssContributionBasis === "gross".
+    const grossPayForBasis = basicPay + totalPayrollPremium + totalAllowancesAdjusted;
     const statutory = computeStatutory(
       {
         grossBasic: fullBasicPay,
+        grossPay: grossPayForBasis,
         absenceLateOnBasic: totalAbsences,
         basicAdjustments,
         monthlyGrossBasic: (Number(employee.basicPay) || 0),

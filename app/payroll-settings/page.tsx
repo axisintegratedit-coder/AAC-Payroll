@@ -15,7 +15,8 @@ import {
 } from "lucide-react";
 import { canAccessAdminPageAsync } from "@/lib/adminAuth";
 import { applyAppTheme, DEFAULT_APP_THEME, normalizeTheme, type AppTheme } from "@/lib/appTheme";
-import { getConfigItem, setConfigItem } from "@/lib/firestore";
+import { getConfigItem, setConfigItem, getCollectionItems, setCollectionItems } from "@/lib/firestore";
+import { recomputeSssForRecord, type SssRecomputableRecord } from "@/lib/sssBasisRecompute";
 import { storageKeys } from "@/lib/appStorage";
 import { logAudit } from "@/lib/auditTrail";
 import {
@@ -39,6 +40,7 @@ import {
 } from "@/lib/payrollSettingsTypes";
 import {
   SEED_STATUTORY_SETTINGS,
+  type SssContributionBasis,
   SEED_EFFECTIVE_SSS_CONFIG,
   buildSSSBrackets,
   type StatutorySettings,
@@ -467,6 +469,10 @@ function SSSSection() {
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState<SSSConfig | null>(null);
   const [saving, setSaving] = useState(false);
+  // Which compensation figure sets the SSS MSC bracket. Lives on the statutory-engine settings doc.
+  const [basis, setBasis] = useState<SssContributionBasis>("basic");
+  const [savingBasis, setSavingBasis] = useState(false);
+  const [basisNotice, setBasisNotice] = useState<{ recomputedDraftRuns: number; affectedNonDraft: { title: string; status: string }[] } | null>(null);
 
   useEffect(() => {
     getConfigItem<SSSConfig>(storageKeys.sssConfig, SEED_SSS_CONFIG).then((res) => {
@@ -478,7 +484,96 @@ function SSSSection() {
         emitSettingsUpdated(storageKeys.sssConfig);
       }
     });
+    getConfigItem<StatutorySettings>(storageKeys.statutorySettings, SEED_STATUTORY_SETTINGS).then((res) => {
+      setBasis(res?.sssContributionBasis === "gross" ? "gross" : "basic");
+    });
   }, []);
+
+  async function changeBasis(next: SssContributionBasis) {
+    if (next === basis || savingBasis) return;
+    setSavingBasis(true);
+    setPageSaving(true);
+    try {
+      const current = await getConfigItem<StatutorySettings>(storageKeys.statutorySettings, SEED_STATUTORY_SETTINGS);
+      const merged = { ...(current?.philhealth ? current : SEED_STATUTORY_SETTINGS), sssContributionBasis: next };
+      await setConfigItem(storageKeys.statutorySettings, merged);
+      emitSettingsUpdated(storageKeys.statutorySettings);
+      await logAudit({
+        action: "SAVED",
+        entityType: "PayrollSettings",
+        entityId: "sssContributionBasis",
+        entityName: "SSS Contribution Basis",
+        details: JSON.stringify({ from: basis, to: next }),
+      });
+      setBasis(next);
+      // Recompute SSS for SAVED Draft runs only; leave every non-Draft snapshot untouched and report
+      // them so the user can re-open/adjust manually. Open drafts also live-recompute via the
+      // statutorySettings-updated listener in Add Payroll.
+      const notice = await recomputeDraftRunsForSssBasis(merged);
+      setBasisNotice(notice);
+    } finally {
+      setSavingBasis(false);
+      setPageSaving(false);
+    }
+  }
+
+  // Recompute SSS in place for saved DRAFT runs; return the count plus the non-Draft runs left as-is.
+  async function recomputeDraftRunsForSssBasis(mergedSettings: StatutorySettings) {
+    const [records, approvals, sssEffective] = await Promise.all([
+      getCollectionItems<Record<string, unknown>>(storageKeys.payrollRecords),
+      getConfigItem<Record<string, { status?: string }>>(storageKeys.payrollRunApprovals, {}),
+      getConfigItem<typeof SEED_EFFECTIVE_SSS_CONFIG>(storageKeys.sssEffectiveConfig, {
+        ...SEED_EFFECTIVE_SSS_CONFIG,
+        brackets: buildSSSBrackets(),
+      }),
+    ]);
+    const sssConfig = sssEffective?.brackets?.length ? sssEffective : { ...SEED_EFFECTIVE_SSS_CONFIG, brackets: buildSSSBrackets() };
+
+    // A run is Draft unless its approval says Submitted/Checked/Approved/Adjusted/Archived.
+    const NON_DRAFT = new Set(["Submitted", "Checked", "Approved", "Adjusted", "Archived", "For Review", "Locked"]);
+    const runIdOf = (r: Record<string, unknown>) => String(r.payrollRunId || r.bulkRunId || "");
+    const isNonDraft = (runId: string) => NON_DRAFT.has(String(approvals?.[runId]?.status || ""));
+
+    const affectedNonDraftByRun = new Map<string, { title: string; status: string }>();
+    let recomputedDraftRuns = 0;
+    const touchedRuns = new Set<string>();
+    let changedAny = false;
+
+    const nextRecords = records.map((record) => {
+      const runId = runIdOf(record);
+      if (isNonDraft(runId)) {
+        if (!affectedNonDraftByRun.has(runId)) {
+          affectedNonDraftByRun.set(runId, {
+            title: String(record.payrollPeriod || record.monthYear || runId || "Payroll run"),
+            status: String(approvals?.[runId]?.status || ""),
+          });
+        }
+        return record; // never touch a non-Draft snapshot
+      }
+      const result = recomputeSssForRecord(record as SssRecomputableRecord, mergedSettings, sssConfig);
+      if (result.changed) {
+        changedAny = true;
+        if (!touchedRuns.has(runId)) {
+          touchedRuns.add(runId);
+          recomputedDraftRuns += 1;
+        }
+        return { ...record, ...result.patch };
+      }
+      return record;
+    });
+
+    if (changedAny) {
+      await setCollectionItems(
+        storageKeys.payrollRecords,
+        nextRecords.map((r) => ({ ...r, id: String((r as { id?: string }).id || "") })).filter((r) => r.id)
+      );
+    }
+
+    return {
+      recomputedDraftRuns,
+      affectedNonDraft: Array.from(affectedNonDraftByRun.values()),
+    };
+  }
 
   function startEdit() {
     if (!config) return;
@@ -562,6 +657,88 @@ function SSSSection() {
           </div>
         ))}
       </div>
+
+      {/* Contribution basis — which compensation figure sets the MSC bracket */}
+      <div
+        style={{
+          display: "flex",
+          flexWrap: "wrap",
+          alignItems: "center",
+          gap: 12,
+          background: "#f8fafc",
+          border: "1px solid #e2e8f0",
+          borderRadius: 10,
+          padding: "12px 16px",
+          marginBottom: 16,
+        }}
+      >
+        <div style={{ flex: "1 1 auto", minWidth: 220 }}>
+          <p style={{ margin: 0, fontSize: 11, fontWeight: 700, color: "#64748b", textTransform: "uppercase", letterSpacing: "0.08em" }}>
+            Contribution basis
+          </p>
+          <p style={{ margin: "2px 0 0", fontSize: 12, color: "#64748b" }}>
+            Determines which compensation figure sets the SSS MSC bracket.
+          </p>
+        </div>
+        <div style={{ display: "inline-flex", borderRadius: 8, border: "1px solid #cbd5e1", overflow: "hidden" }}>
+          {(["basic", "gross"] as SssContributionBasis[]).map((option) => {
+            const active = basis === option;
+            return (
+              <button
+                key={option}
+                type="button"
+                onClick={() => changeBasis(option)}
+                disabled={savingBasis}
+                style={{
+                  padding: "7px 16px",
+                  fontSize: 13,
+                  fontWeight: 700,
+                  border: "none",
+                  cursor: savingBasis ? "default" : "pointer",
+                  background: active ? "var(--theme-accent)" : "#fff",
+                  color: active ? "#fff" : "#334155",
+                }}
+              >
+                {option === "basic" ? "Basic pay" : "Gross pay"}
+              </button>
+            );
+          })}
+        </div>
+      </div>
+
+      {basisNotice ? (
+        <div
+          style={{
+            marginBottom: 16,
+            borderRadius: 10,
+            border: "1px solid #bfdbfe",
+            background: "#eff6ff",
+            padding: "12px 16px",
+            fontSize: 13,
+            color: "#1e3a5f",
+          }}
+        >
+          <p style={{ margin: 0, fontWeight: 700 }}>
+            Recomputed SSS for {basisNotice.recomputedDraftRuns} Draft run{basisNotice.recomputedDraftRuns === 1 ? "" : "s"}.
+          </p>
+          {basisNotice.affectedNonDraft.length > 0 ? (
+            <div style={{ marginTop: 6 }}>
+              <p style={{ margin: "0 0 4px", fontWeight: 700, color: "#92400e" }}>
+                These runs were NOT changed (they carry approved snapshots — re-open/adjust manually):
+              </p>
+              <ul style={{ margin: 0, paddingLeft: 18 }}>
+                {basisNotice.affectedNonDraft.map((run, i) => (
+                  <li key={i}>
+                    {run.title} — <strong>{run.status}</strong>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          ) : (
+            <p style={{ margin: "4px 0 0", color: "#64748b" }}>No submitted/approved runs were affected.</p>
+          )}
+        </div>
+      ) : null}
 
       <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: 10 }}>
         {!editing ? (

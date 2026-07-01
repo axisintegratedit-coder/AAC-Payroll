@@ -97,6 +97,39 @@ describe("computeStatutory — Boldr payslip regression (regular run, default se
     expect(r.philhealth).toBe(253.75); // PHIC still on GROSS 10,150, unaffected by adjustment
   });
 
+  it("sssContributionBasis default 'basic' brackets on basic pay, ignoring gross", () => {
+    // basic 10,150 -> MSC 10,000 -> 500. A large gross (with OT/allowances) must NOT change SSS.
+    const r = computeStatutory(
+      { grossBasic: 10150, grossPay: 30000, hasAttendance: true, runType: "regular" },
+      settings, // default basis = "basic"
+      sssConfig
+    );
+    expect(r.sss).toBe(500.0);
+    expect(r.sssMsc).toBe(10000);
+  });
+
+  it("sssContributionBasis 'gross' brackets on gross pay", () => {
+    const grossSettings = { ...settings, sssContributionBasis: "gross" as const };
+    // basic 10,150 but gross 30,000 -> MSC 30,000 -> 1,500.
+    const r = computeStatutory(
+      { grossBasic: 10150, grossPay: 30000, hasAttendance: true, runType: "regular" },
+      grossSettings,
+      sssConfig
+    );
+    expect(r.sssMsc).toBe(30000);
+    expect(r.sss).toBe(1500.0);
+  });
+
+  it("'gross' basis still skips SSS when basic pay is 0 (zero-skip stays on basic)", () => {
+    const grossSettings = { ...settings, sssContributionBasis: "gross" as const };
+    const r = computeStatutory(
+      { grossBasic: 0, grossPay: 30000, hasAttendance: true, runType: "regular" },
+      grossSettings,
+      sssConfig
+    );
+    expect(r.sss).toBe(0);
+  });
+
   it("Zero case: hasAttendance false -> all zero", () => {
     const r = computeStatutory({ grossBasic: 12250, hasAttendance: false }, settings, sssConfig);
     expect(r.sss).toBe(0);

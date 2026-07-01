@@ -97,10 +97,15 @@ export type StatutoryPagibigConfig = {
   mfsCap: number; // 10000
 };
 
+export type SssContributionBasis = "gross" | "basic";
+
 export type StatutorySettings = {
   effectiveFrom: string;
   effectiveTo: string | null;
   sssBasisSource: "net_basic";
+  // Which compensation figure sets the SSS MSC bracket. "basic" = per-cutoff basic pay (current
+  // behavior); "gross" = per-cutoff gross pay. The zero-skip and floor/ceiling clamp are unchanged.
+  sssContributionBasis?: SssContributionBasis; // default "basic" (preserves existing behavior)
   // Boldr payslips D & E: non-exempt w/ absences still got SSS on the GROSS MSC bracket (500),
   // implying absence/late is NOT netted from the SSS base. Default FALSE matches observed output.
   // TODO: confirm with Boldr (Ma'am Donna) whether SSS "Net Basic" excludes absence/late.
@@ -122,6 +127,7 @@ export const SEED_STATUTORY_SETTINGS: StatutorySettings = {
   effectiveFrom: "2025-01-01",
   effectiveTo: null,
   sssBasisSource: "net_basic",
+  sssContributionBasis: "basic",
   sssNetOfAbsenceLate: false,
   sssNetOfAdjustments: true,
   philhealthBasis: "gross_basic",
@@ -137,6 +143,8 @@ export type StatutoryRunType = "regular" | "eom_adjustment" | "final_pay";
 
 export type StatutoryInput = {
   grossBasic: number; // per-cutoff basic before absence/late/adjustments
+  grossPay?: number; // per-cutoff gross pay (basic + premiums + adjusted allowances) — used when
+  //                    sssContributionBasis === "gross" to set the MSC bracket. Falls back to basic.
   absenceLateOnBasic?: number; // amount of absence/late attributable to basic (>=0)
   basicAdjustments?: number; // signed salary adjustments to basic (e.g. -12800)
   monthlyGrossBasic?: number; // used only for EOM/final PHIC true-up
@@ -179,9 +187,15 @@ export function computeStatutory(
     return zero;
   }
 
-  // SSS — bracketed from NET BASIC (adjustments always netted; absence/late only if configured).
+  // SSS — the compensation figure that sets the MSC bracket is chosen by sssContributionBasis:
+  //   "basic" (default) = per-cutoff basic pay (existing behavior);
+  //   "gross"           = per-cutoff gross pay.
+  // Adjustments/absence netting still apply to whichever base is selected; the zero-skip above stays
+  // on basic regardless. Everything downstream (floor/ceiling clamp, EE/ER, EC, WISP) is unchanged.
+  const basis = settings.sssContributionBasis || "basic";
+  const mscBase = basis === "gross" ? (Number(input.grossPay) || grossBasic) : grossBasic;
   const sssNetBasic =
-    grossBasic +
+    mscBase +
     (settings.sssNetOfAdjustments ? basicAdjustments : 0) -
     (settings.sssNetOfAbsenceLate ? absenceLateOnBasic : 0);
   const bracket = lookupSSSBracket(sssNetBasic, sssConfig);
